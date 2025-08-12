@@ -9,31 +9,12 @@ The tool supports **six labeling classes**:
 
 ## 📦 Quick Start
 
-### 1. From Source (Development Mode)
-```bash
 # Requires Python 3.10+
-# (Optional) Create a virtual environment:
-conda create -n opcal-mlt python=3.10 -y && conda activate opcal-mlt
-
-# Install in editable mode
 pip install -e .
-
-# (Recommended for development)
-poetry install
-
-# Run the application
-streamlit run app/main.py
-```
-
-### 2. From Prebuilt Distribution (ZIP)
-Prebuilt ZIP archives are available for **Windows**, **macOS**, and **Linux**.  
-Each contains a launcher script in the root directory for easy startup without opening a terminal.
-
-- **Windows** → Double-click `OPCAL-Labeler.bat`  
-- **macOS** → Double-click `OPCAL-Labeler.command` *(may require granting execution permission: `chmod +x OPCAL-Labeler.command`)*  
-- **Linux** → Double-click or run `./OPCAL-Labeler.sh`
-
-No additional installation steps are needed if Python 3.10+ is installed and available in the system PATH.
+# run (all OS)
+opcal-mlt
+# or (explicit)
+python -m streamlit run src/opcal/app/main.py
 
 ---
 
