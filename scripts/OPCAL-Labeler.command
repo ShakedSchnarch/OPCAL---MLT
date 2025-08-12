@@ -8,7 +8,7 @@ set -Eeuo pipefail
 trap 'echo "[ERROR] Launcher failed. See logs above." >&2' ERR
 
 # Work from the script's directory (supports double-click from Finder)
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 # Resolve Python binary (allow override via env var)
 PYTHON_BIN=${PYTHON_BIN:-python3}
@@ -40,4 +40,4 @@ python -m pip install --upgrade pip >/dev/null
 python -m pip install -e .
 
 # Launch the app
-exec python -m streamlit run app/main.py
+exec python -m streamlit run src/opcal/app/main.py
