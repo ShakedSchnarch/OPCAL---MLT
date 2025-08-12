@@ -1,0 +1,53 @@
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+.opcal_venv/
+
+# Distribution and build
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE/editor settings
+.vscode/
+.idea/
+
+# Logs and temp files
+*.log
+*.tmp
+*.temp
+
+# Jupyter and notebooks
+.ipynb_checkpoints
+
+# Test and coverage
+.pytest_cache/
+htmlcov/
+.tox/
+.coverage
+coverage.xml
+
+# Streamlit cache
+.streamlit/
+
+# Example/output data
+examples/__pycache__/
+examples/*.csv
+examples/*.npz
+examples/*.hdf5
+
+# User-specific configs
+*.env
+config.yaml
