@@ -1,30 +1,37 @@
 # OPCAL Manual Labeling Tool (MLT)
 
-A fast internal tool for manual labeling of calcium imaging traces into 6 classes:
-**High‑flat, High‑oscillatory, Oscillatory, Low‑activity, Uncertain, Drifting**.
+OPCAL-Labeler is a professional, cross-platform manual labeling tool designed for calcium imaging traces in neuroscience research. It facilitates accurate and efficient annotation of calcium signals to support advanced data analysis.
+
+The tool supports 6 classes for labeling: High-flat, High-oscillatory, Oscillatory, Low-activity, Uncertain, and Drifting, with the ability to add per-cell notes for detailed annotation.
 
 ## Quick start
 ```bash
-# (optional) conda create -n opcal-mlt python=3.11 -y && conda activate opcal-mlt
+# Requires Python 3.10+
+# (optional) conda create -n opcal-mlt python=3.10 -y && conda activate opcal-mlt
 pip install -e .
-# Or with poetry:
+# For development, Poetry is recommended:
 # poetry install
 streamlit run app/main.py
 ```
 
-## Features in MVP
+## Current Features (v0.3.0)
 - Load traces (CSV/NPZ/HDF5) and metadata
 - Baseline & robust SD (MAD) calculation
 - Threshold visualization (default 3 SD)
 - Peak detection with `scipy.signal.find_peaks`
-- One‑click/shortcut labeling per cell, autosave JSONL
+- One-click/shortcut labeling per cell, with per-cell label and notes persistence
+- Session resume capability to continue labeling without loss
+- Progress bar indicating labeling completion status
+- Export labels and session data in CSV format (default)
+- Logo and favicon customization
+- Dual STD shading displayed (green pre-stimulus, red post-stimulus)
 - Full provenance stored with each label
 
 See `USER_GUIDE.md` for usage and `API.md` for data formats.
 
+## Installation (cross-platform)
+Prerequisite: Python 3.10+ installed and available on your system PATH. Dependencies are installed automatically.
 
-## Installation (cross‑platform)
-Prerequisite: Python 3.10+ installed.
 Recommended (isolated) install with pipx:
 ```bash
 python -m pip install --user pipx
@@ -48,4 +55,12 @@ Each session creates:
 ├─ peaks.csv
 └─ cell_map.csv
 ```
-Dual SD shading is displayed (green pre‑stimulus, red post‑stimulus).
+The `labels.csv` file is the main output for downstream analysis and includes timestamps, annotator ID, and consistent cell indices for reproducibility. Dual STD shading is displayed (green pre-stimulus, red post-stimulus).
+
+## Documentation
+- [User Guide](USER_GUIDE.md) — Detailed usage instructions  
+- [API Reference](API.md) — Data formats and API details  
+- [Changelog](CHANGELOG.md) — Version history and updates  
+
+## License
+This project is licensed under the MIT License.
