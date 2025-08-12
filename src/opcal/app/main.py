@@ -14,7 +14,11 @@ from datetime import datetime, timezone
 from opcal.core import preprocess as pp
 from opcal.core import peaks as pk
 from opcal.core import features as ft
-from opcal.core.schemas import PreprocessSettings
+try:
+    # New name (preferred)
+    from opcal.core.schemas import PreprocessConfig
+except ImportError:  # Backward-compatibility with older versions
+    from opcal.core.schemas import PreprocessSettings as PreprocessConfig
 from opcal.core.io import save_jsonl
 from opcal.app.session_io import make_session_dir, write_session_header, write_cell_map, append_labels, append_peaks, now_utc_iso
 
