@@ -51,3 +51,8 @@ examples/*.hdf5
 # User-specific configs
 *.env
 config.yaml
+
+# build artifacts
+dist/
+*.egg-info/
+build/
