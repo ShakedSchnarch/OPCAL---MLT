@@ -1,44 +1,31 @@
-[tool.poetry]
+[project]
 name = "opcal-mlt"
-version = "0.3.0"
-description = "OPCAL-Labeler: A professional manual labeling tool for calcium imaging traces in neuroscience research"
-authors = ["OPCAL Team"]
+version = "0.3.1"
+description = "OPCAL-Labeler: manual labeling tool for calcium imaging traces"
 readme = "README.md"
-packages = [{ include = "app" }, { include = "core" }]
+requires-python = ">=3.10"
+authors = [{ name = "OPCAL Team" }]
 
-[tool.poetry.dependencies]
-python = ">=3.10,<3.13"
-streamlit = "^1.36.0"
-numpy = "^1.26.0"
-pandas = "^2.2.0"
-scipy = "^1.12.0"
-pydantic = "^2.5.0"
-plotly = "^5.22.0"
-matplotlib = "^3.8.0"
-Pillow = "^10.0.0"
+dependencies = [
+  "streamlit>=1.36,<2.0",
+  "numpy>=1.26,<2.0",
+  "pandas>=2.2,<3.0",
+  "scipy>=1.12,<2.0",
+  "matplotlib>=3.8,<4.0",
+  "plotly>=5.22,<6.0",
+  "Pillow>=10,<11"
+]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.0.0"
-black = "^24.0.0"
-ruff = "^0.5.0"
-mypy = "^1.10.0"
-pre-commit = "^3.7.0"
+[project.scripts]
+opcal-mlt = "opcal.app.launch:main"
 
-[tool.black]
-line-length = 100
-target-version = ['py310']
+[tool.setuptools]
+package-dir = {"" = "src"}
 
-[tool.ruff]
-line-length = 100
-
-[tool.mypy]
-python_version = "3.10"
-warn_unused_ignores = true
-ignore_missing_imports = true
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["opcal*"]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.poetry.scripts]
-opcal-mlt = "app.launch:main"
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
