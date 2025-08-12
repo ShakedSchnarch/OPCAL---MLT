@@ -1,5 +1,7 @@
 # OPCAL Manual Labeling Tool (MLT)
 
+![alt text](image.png)
+
 **OPCAL-Labeler** is a professional, cross-platform manual labeling tool designed for calcium imaging traces in neuroscience research. It enables accurate and efficient annotation of calcium signals, supporting advanced data analysis workflows.
 
 The tool supports **six labeling classes**:  
