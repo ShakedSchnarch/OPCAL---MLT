@@ -11,12 +11,12 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from datetime import datetime, timezone
-from core import preprocess as pp
-from core import peaks as pk
-from core import features as ft
-from core.schemas import PreprocessConfig
-from core.io import save_jsonl
-from app.session_io import make_session_dir, write_session_header, write_cell_map, append_labels, append_peaks, now_utc_iso
+from opcal.core import preprocess as pp
+from opcal.core import peaks as pk
+from opcal.core import features as ft
+from opcal.core.schemas import PreprocessConfig
+from opcal.core.io import save_jsonl
+from opcal.app.session_io import make_session_dir, write_session_header, write_cell_map, append_labels, append_peaks, now_utc_iso
 
 # --- App metadata & constants ---
 APP_NAME = "OPCAL‑Labeler"
