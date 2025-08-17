@@ -87,6 +87,9 @@ def render_stepper_and_tips(stage: int) -> None:
     elif current_step == 2:
         st.markdown('<div class="hint"><b>Tip:</b> Upload a CSV/NPZ and choose how to assign cell IDs (from file or auto-generate).</div>', unsafe_allow_html=True)
     elif current_step == 3:
-        st.markdown('<div class="hint"><b>Tip:</b> Navigate cells, assign labels and notes. You can undo the last save.</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="hint"><b>Tip:</b> Calibrate preprocessing (smoothing), set thresholds, then navigate cells and assign labels/notes. You can undo the last save.</div>',
+            unsafe_allow_html=True,
+        )
     else:
         st.markdown('<div class="hint"><b>Tip:</b> Export a ZIP archive of the session folder for sharing or backup.</div>', unsafe_allow_html=True)

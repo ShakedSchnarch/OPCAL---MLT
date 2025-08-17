@@ -42,6 +42,13 @@ s.setdefault("traces", None)
 s.setdefault("cell_ids", None)
 s.setdefault("session_dir", "")
 
+s.setdefault("fs_hz", 1.08)
+s.setdefault("smooth", True)
+s.setdefault("window", 31)
+s.setdefault("poly", 3)
+s.setdefault("show_raw", True)
+s.setdefault("show_smoothed", True)
+
 
 # === App metadata & constants ===
 APP_NAME = "OPCAL‑Labeler"
@@ -168,7 +175,7 @@ if s.get("annotator") and s.get("save_dir") and (s.get("traces") is not None) an
             "session_id": Path(s.session_dir).name,
             "recording_id": rec_id,
             "annotator_id": s.annotator,
-            "fs_hz": float(s.get("fs_hz", 10.0)),
+            "fs_hz": float(s.get("fs_hz", 1.08)),
             "started_utc": now_utc_iso(),
             "app_version": APP_VERSION,
             "source_path": "",

@@ -230,19 +230,89 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
     if s.get("traces") is None or s.get("cell_ids") is None:
         st.warning("No data loaded yet. Go back to Step 2 (Upload & indexing).")
         return
+    # Estimate duration using current (or default) fs to derive stable defaults
+    _fs_guess = float(s.get("fs_hz", 1.08))
+    _T = int(getattr(s.traces, "shape", [0, 0])[0])
+    _dur_s = (_T / _fs_guess) if _fs_guess > 0 else 0.0
+    # Default stimulus time ensures at least ~30 samples (or 10 s) before the split,
+    # but not more than ~40% of the recording to avoid a tiny post segment.
+    _stim_default = float(
+        s.get(
+            "stim_time_s",
+            min(max(30.0 / max(_fs_guess, 1e-9), 10.0), max(1.0, 0.4 * _dur_s)),
+        )
+    )
     # Sidebar: processing/labeling parameters
     with st.sidebar:
         st.markdown("### Labeling parameters")
-        s.fs_hz = st.number_input("Sampling rate (Hz)", min_value=0.1, value=float(s.get("fs_hz", 10.0)), step=0.1)
-        s.smooth = st.checkbox("Apply Savitzky–Golay smoothing", value=bool(s.get("smooth", True)))
-        s.window = st.slider("Smooth window", 5, 101, int(s.get("window", 31)), step=2)
-        s.poly = st.slider("Smooth polyorder", 1, 5, int(s.get("poly", 3)))
+        s.fs_hz = st.number_input(
+            "Sampling rate (Hz)",
+            min_value=0.01,
+            value=float(s.get("fs_hz", 1.08)),
+            step=0.01,
+            format="%.2f",
+            help="Default is 1.08 Hz (≈0.93 s/sample)"
+        )
+        # Plot visibility preferences (persist across reruns)
+        s.show_raw = st.checkbox(
+            "Show raw signal",
+            value=bool(s.get("show_raw", True)),
+            help="Toggle the original unfiltered trace.",
+        )
+        s.show_smoothed = st.checkbox(
+            "Show smoothed signal",
+            value=bool(s.get("show_smoothed", True)),
+            help="Toggle the Savitzky–Golay smoothed trace (when smoothing is enabled).",
+        )
+        # --- Preprocessing – Smoothing (moved back to Step 3) ---
+        s.smooth = st.checkbox(
+            "Apply Savitzky–Golay smoothing",
+            value=bool(s.get("smooth", True)),
+            help=(
+                "Phase-preserving smoothing that reduces noise without shifting peaks. "
+                "Turn off to view the raw signal."
+            ),
+        )
+        if not s.smooth:
+            s.show_smoothed = False
+        if s.smooth:
+            # Window slider uses odd values only (step=2), default coerced to odd
+            _win_default = int(s.get("window", 31))
+            if _win_default % 2 == 0:
+                _win_default += 1
+            s.window = st.slider(
+                "Smoothing window (samples)",
+                5, 101, _win_default, step=2,
+                help=(
+                    "Length of the Savitzky–Golay window in samples (must be odd). "
+                    "Larger windows produce stronger smoothing but can flatten short events. "
+                    "Typical: 21–61."
+                ),
+            )
+            s.poly = st.slider(
+                "Polynomial order",
+                1, 5, int(s.get("poly", 3)),
+                help=(
+                    "Order of the fitted polynomial within each window. "
+                    "Lower values = gentler smoothing; higher values = more flexible curve. "
+                    "Must be less than the window size. Typical: 2–3."
+                ),
+            )
         s.baseline_method = st.selectbox("Baseline method", ["rolling_median", "percentile (25)"], index=0 if str(s.get("baseline_method","rolling_median")).startswith("rolling") else 1)
         s.window_s = st.slider("Rolling median window (s)", 5, 60, int(s.get("window_s", 20)))
         s.k = st.slider("SD threshold k", 1.0, 6.0, float(s.get("k", 3.0)), step=0.5)
-        s.stim_time_s = st.number_input("Stimulus time (s)", min_value=0.0, value=float(s.get("stim_time_s", 5.0)), help="Time when stimulation starts; used for dual-SD shading")
+        s.stim_time_s = st.number_input(
+            "Stimulus time (s)",
+            min_value=0.0,
+            value=float(_stim_default),
+            step=1.0,
+            help=(
+                "Time when stimulation starts; used for dual-SD thresholds. "
+                "Default adapts to ensure ≥~30 samples (or 10 s) before the split."
+            ),
+        )
     # Use latest state for processing
-    fs_hz      = float(s.get("fs_hz", 10.0))
+    fs_hz      = float(s.get("fs_hz", 1.08))
     smooth     = bool(s.get("smooth", True))
     window     = int(s.get("window", 31))
     poly       = int(s.get("poly", 3))
@@ -319,8 +389,9 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
         st.markdown(f"### Cell <code>{s.cell_ids[s.current_cell]}</code>", unsafe_allow_html=True)
         t = np.arange(x.size)/fs_hz
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=t, y=x,   name="raw",      line=dict(width=1)))
-        if smooth:
+        if bool(s.get("show_raw", True)):
+            fig.add_trace(go.Scatter(x=t, y=x, name="raw", line=dict(width=1)))
+        if smooth and bool(s.get("show_smoothed", True)):
             fig.add_trace(go.Scatter(x=t, y=x_s, name="smoothed", line=dict(width=2)))
         fig.add_trace(go.Scatter(x=t, y=base, name="baseline", line=dict(width=1, dash="dash")))
         if stim_idx > 1:
@@ -428,13 +499,44 @@ def render_start_session(*, s):
     st.header("Step 1 — Start new session")
     st.caption("Pick one action to initialize or restore your working session.")
 
-    # Unified chooser for clarity
+    # Unified chooser for clarity — hide Resume when no valid session exists
+    def _has_resumable_session(base_root: Path) -> bool:
+        """Return True if a valid session folder exists under base_root.
+        A folder is considered valid if it contains either labels.csv or session.csv.
+        """
+        try:
+            if not base_root.exists():
+                return False
+            for rec_dir in base_root.iterdir():
+                if rec_dir.is_dir():
+                    for sess in rec_dir.iterdir():
+                        if sess.is_dir() and ((sess / "labels.csv").exists() or (sess / "session.csv").exists()):
+                            return True
+            return False
+        except Exception:
+            return False
+
+    # Determine the save root to scan
+    _default_root = Path.home() / "OPCAL_LABELS"
+    _base_root = Path(str(s.get("save_dir", str(_default_root))).strip()).expanduser()
+    _has_resume = _has_resumable_session(_base_root)
+    s["_resume_available"] = _has_resume
+
+    # Build radio choices dynamically
+    _choices = ["New session"]
+    if _has_resume:
+        _choices.append("Resume recent session")
+    _choices.append("Load session from path")
+
     choice = st.radio(
         "Action",
-        ("New session", "Resume recent session", "Load session from path"),
+        tuple(_choices),
         horizontal=True,
         key="start_choice",
     )
+
+    if not _has_resume:
+        st.caption("No previous session was found in the save folder. Start a new session or load from a path.")
 
     # --- New session ---
     if choice == "New session":
@@ -753,7 +855,14 @@ def render_params(*, s):
     exposes these parameters in the sidebar of the workspace itself.
     """
     st.header("Step 3 — Labeling parameters")
-    s.fs_hz = st.number_input("Sampling rate (Hz)", min_value=0.1, value=float(s.get("fs_hz", 10.0)), step=0.1)
+    s.fs_hz = st.number_input(
+        "Sampling rate (Hz)",
+        min_value=0.01,
+        value=float(s.get("fs_hz", 1.08)),
+        step=0.01,
+        format="%.2f",
+        help="Default is 1.08 Hz (≈0.93 s/sample)"
+    )
     s.smooth = st.checkbox("Apply Savitzky–Golay smoothing", value=bool(s.get("smooth", True)))
     s.window = st.slider("Smooth window", 5, 101, int(s.get("window", 31)), step=2)
     s.poly = st.slider("Smooth polyorder", 1, 5, int(s.get("poly", 3)))
