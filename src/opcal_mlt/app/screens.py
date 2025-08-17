@@ -12,10 +12,10 @@ from opcal_mlt.core import features as ft
 from opcal_mlt.app.session_io import append_labels, append_peaks
 
 def render_finish_export(session_state) -> None:
-    """Step 5: Export the current session folder as a ZIP."""
+    """Step 4: Export the current session folder as a ZIP."""
     s = session_state
     st.markdown('---')
-    st.subheader("Step 5 — Finish & export")
+    st.subheader("Step 4 — Finish & export")
     export_col1, export_col2 = st.columns([1, 2])
     with export_col1:
         do_export = st.button("Export session as ZIP", key="btn_export_zip")
@@ -29,25 +29,42 @@ def render_finish_export(session_state) -> None:
             zip_base = sess_path.parent / f"{sess_path.name}"
             zip_path = shutil.make_archive(str(zip_base), "zip", root_dir=sess_path)
             s.export_done = True
-            s.stage = 5
-            st.rerun()
             st.success(f"Exported: {zip_path}")
         except Exception as e:
             st.error(f"Export failed: {e}")
 
-def render_labeling_workspace(*, s, params: dict, theme: dict, logger) -> None:
+def render_labeling_workspace(*, s, theme: dict, logger) -> None:
     """
-    Step 4: Main labeling workspace (navigation, plots, labeling & save).
-    `params` must contain: fs_hz, smooth, window, poly, baseline_method, window_s, k, stim_time_s
+    Step 3: Main labeling workspace (navigation, plots, labeling & save).
     """
-    fs_hz      = float(params["fs_hz"])
-    smooth     = bool(params["smooth"])
-    window     = int(params["window"])
-    poly       = int(params["poly"])
-    baseline_method = str(params["baseline_method"])
-    window_s   = int(params["window_s"])
-    k          = float(params["k"])
-    stim_time_s= float(params["stim_time_s"])
+    # Safety: initialize state keys used below
+    if "label_map" not in s or not isinstance(s.label_map, dict):
+        s.label_map = {}
+    if "current_cell" not in s:
+        s.current_cell = 0
+    if s.get("traces") is None or s.get("cell_ids") is None:
+        st.warning("No data loaded yet. Go back to Step 2 (Upload & indexing).")
+        return
+    # --- Sidebar parameters (visible and editable during labeling) ---
+    with st.sidebar:
+        st.markdown("### Labeling parameters")
+        s.fs_hz = st.number_input("Sampling rate (Hz)", min_value=0.1, value=float(s.get("fs_hz", 10.0)), step=0.1)
+        s.smooth = st.checkbox("Apply Savitzky–Golay smoothing", value=bool(s.get("smooth", True)))
+        s.window = st.slider("Smooth window", 5, 101, int(s.get("window", 31)), step=2)
+        s.poly = st.slider("Smooth polyorder", 1, 5, int(s.get("poly", 3)))
+        s.baseline_method = st.selectbox("Baseline method", ["rolling_median", "percentile (25)"], index=0 if str(s.get("baseline_method","rolling_median")).startswith("rolling") else 1)
+        s.window_s = st.slider("Rolling median window (s)", 5, 60, int(s.get("window_s", 20)))
+        s.k = st.slider("SD threshold k", 1.0, 6.0, float(s.get("k", 3.0)), step=0.5)
+        s.stim_time_s = st.number_input("Stimulus time (s)", min_value=0.0, value=float(s.get("stim_time_s", 5.0)), help="Time when stimulation starts; used for dual-SD shading")
+    # Use latest state for processing
+    fs_hz      = float(s.get("fs_hz", 10.0))
+    smooth     = bool(s.get("smooth", True))
+    window     = int(s.get("window", 31))
+    poly       = int(s.get("poly", 3))
+    baseline_method = str(s.get("baseline_method", "rolling_median"))
+    window_s   = int(s.get("window_s", 20))
+    k          = float(s.get("k", 3.0))
+    stim_time_s= float(s.get("stim_time_s", 5.0))
 
     T, N = s.traces.shape
     left, mid, right = st.columns([1, 2, 1], gap="large")
@@ -114,7 +131,7 @@ def render_labeling_workspace(*, s, params: dict, theme: dict, logger) -> None:
     peaks = pk.detect_peaks(x_s, thr, fs_hz, min_distance_s=1.0)
 
     with mid:
-        st.subheader(f"Cell {s.cell_ids[s.current_cell]}")
+        st.markdown(f"### Cell <code>{s.cell_ids[s.current_cell]}</code>", unsafe_allow_html=True)
         t = np.arange(x.size)/fs_hz
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=t, y=x,   name="raw",      line=dict(width=1)))
@@ -131,6 +148,7 @@ def render_labeling_workspace(*, s, params: dict, theme: dict, logger) -> None:
         fig.add_trace(go.Scatter(x=t[:stim_idx],  y=thr_pre,  name=f"thr pre ({k}·SD)",  line=dict(width=1)))
         fig.add_trace(go.Scatter(x=t[stim_idx:], y=thr_post, name=f"thr post ({k}·SD)", line=dict(width=1)))
         fig.add_trace(go.Scatter(x=t[peaks], y=x_s[peaks], mode="markers", name="peaks"))
+        fig.update_layout(margin=dict(l=10, r=10, t=40, b=10))
         st.plotly_chart(fig, use_container_width=True)
 
     # -------- Right: labeling --------
@@ -208,65 +226,92 @@ from opcal_mlt.app.session_io import make_session_dir, write_session_header, wri
 
 def render_start_session(*, s):
     st.header("Step 1 — Start new session")
-    st.caption("Set annotator and default save folder, then click Start / Update Session to create a session folder.")
-    annotator = st.text_input("Annotator ID", value=s.get("annotator", ""))
-    save_dir = st.text_input("Save directory", value=s.get("save_dir", str(Path.home() / "OPCAL_LABELS")))
-    col1, col2 = st.columns([1,1])
-    with col1:
-        start_session = st.button("Start / Update Session", key="btn_stage1_start")
-    with col2:
-        resume = st.button("Resume last session", key="btn_stage1_resume")
-    if start_session:
-        s.annotator = annotator.strip() or "anon"
-        s.save_dir = save_dir.strip() or str(Path.home() / "OPCAL_LABELS")
-        st.success("Settings saved. You can proceed to Upload.")
-        s.stage = max(s.stage, 2)
-        st.rerun()
-    if resume:
-        base = Path(save_dir.strip() or str(Path.home() / "OPCAL_LABELS"))
-        candidates = []
+    st.caption("Choose what you want to do and complete the minimal details. You can move to the next step once Annotator + Save directory are set.")
+
+    # Unified chooser for clarity
+    choice = st.radio(
+        "Action",
+        ("Start / Update settings", "Resume recent session", "Load session from path"),
+        horizontal=True,
+        key="start_choice",
+    )
+
+    # --- Start / Update settings ---
+    if choice == "Start / Update settings":
+        st.subheader("Start / Update settings")
+        st.caption("Set your annotator ID and where sessions are saved. This does not create files yet; they are created when data is uploaded.")
+        annotator = st.text_input("Annotator ID", value=s.get("annotator", ""), key="start_annotator")
+        save_dir = st.text_input("Save directory", value=s.get("save_dir", str(Path.home() / "OPCAL_LABELS")), key="start_savedir")
+        if st.button("Save settings", key="btn_save_start_settings"):
+            s.annotator = annotator.strip() or "anon"
+            s.save_dir = save_dir.strip() or str(Path.home() / "OPCAL_LABELS")
+            st.success("Settings saved — you can proceed to Upload when ready.")
+        st.markdown('<div class="hint">Tip: You only need these once per working session. You can change them later.</div>', unsafe_allow_html=True)
+
+    # --- Resume recent session ---
+    elif choice == "Resume recent session":
+        st.subheader("Resume recent session")
+        st.caption("We look under your Save directory for the most recent session folders that contain labels.csv.")
+        base_root = st.text_input("Save directory", value=s.get("save_dir", str(Path.home() / "OPCAL_LABELS")), key="resume_savedir")
+        recent = []
+        base = Path(base_root.strip())
         if base.exists():
             for rec_dir in base.iterdir():
                 if rec_dir.is_dir():
                     for sess in rec_dir.iterdir():
-                        if (sess / "labels.csv").exists():
+                        lab = sess / "labels.csv"
+                        if lab.exists():
                             try:
-                                mtime = (sess / "labels.csv").stat().st_mtime
-                                candidates.append((mtime, sess))
+                                mtime = lab.stat().st_mtime
+                                recent.append((mtime, sess))
                             except Exception:
                                 pass
-        if candidates:
-            candidates.sort(reverse=True)
-            p = candidates[0][1]
-            s.session_dir = str(p)
-            labels_csv = p / "labels.csv"
-            cell_map_csv = p / "cell_map.csv"
-            loaded = 0
-            if labels_csv.exists():
+        recent = sorted(recent, key=lambda x: x[0], reverse=True)[:10]
+        if recent:
+            options = [f"{p.parent.name} / {p.name}" for _, p in recent]
+            sel = st.selectbox("Pick a session", options, index=0, key="resume_pick")
+            if st.button("Resume", key="btn_resume_pick"):
                 try:
-                    df_lab = pd.read_csv(labels_csv)
-                    s.label_map = {int(r.cell_index): {"label": str(r.label), "notes": str(r.notes) if not pd.isna(r.notes) else ""} for r in df_lab.itertuples(index=False)}
-                    loaded = len(s.label_map)
+                    p = recent[options.index(sel)][1]
+                    s.session_dir = str(p)
+                    # Ensure annotator/save_dir present so Next can enable
+                    s.annotator = s.get("annotator", "anon")
+                    s.save_dir = base_root.strip() or s.get("save_dir", str(Path.home() / "OPCAL_LABELS"))
+                    # Load existing state (labels + optional cell_map)
+                    labels_csv = p / "labels.csv"
+                    cell_map_csv = p / "cell_map.csv"
+                    loaded = 0
+                    if labels_csv.exists():
+                        try:
+                            df_lab = pd.read_csv(labels_csv)
+                            s.label_map = {int(r.cell_index): {"label": str(r.label), "notes": str(r.notes) if not pd.isna(r.notes) else ""} for r in df_lab.itertuples(index=False)}
+                            loaded = len(s.label_map)
+                        except Exception as e:
+                            st.error(f"Failed to read labels.csv: {e}")
+                    if cell_map_csv.exists() and not s.get("cell_ids"):
+                        try:
+                            df_map = pd.read_csv(cell_map_csv).sort_values("cell_index")
+                            s.cell_ids = [str(x) for x in df_map["cell_id"].tolist()]
+                        except Exception as e:
+                            st.warning(f"Could not read cell_map.csv: {e}")
+                    st.success(f"Resumed: {p} (loaded {loaded} labeled cells)")
                 except Exception as e:
-                    st.error(f"Failed to read labels.csv: {e}")
-            if cell_map_csv.exists() and not s.cell_ids:
-                try:
-                    df_map = pd.read_csv(cell_map_csv)
-                    df_map = df_map.sort_values("cell_index")
-                    s.cell_ids = [str(x) for x in df_map["cell_id"].tolist()]
-                except Exception as e:
-                    st.warning(f"Could not read cell_map.csv: {e}")
-            st.success(f"Resumed last session: {p} ({loaded} labeled cells)")
-            s.stage = max(s.stage, 4)
-            st.rerun()
+                    st.error(f"Could not resume: {e}")
         else:
-            st.warning("No previous sessions found under the selected Save directory.")
-    with st.expander("Load existing session (path)"):
-        load_session_dir = st.text_input("Existing session dir", value=s.get("load_session_dir", ""))
-        if st.button("Load session", key="btn_stage1_load"):
-            p = Path(load_session_dir.strip())
+            st.info("No previous sessions found under the selected Save directory.")
+        st.markdown('<div class="hint">Tip: Change the Save directory above if your sessions are stored elsewhere.</div>', unsafe_allow_html=True)
+
+    # --- Load session by path ---
+    else:
+        st.subheader("Load session from path")
+        st.caption("Paste a full path to an existing session folder (the folder that contains labels.csv).")
+        load_path = st.text_input("Existing session folder path", value=s.get("load_session_dir", ""), key="load_path")
+        if st.button("Load session", key="btn_load_session_path"):
+            p = Path(load_path.strip())
             if p.exists() and p.is_dir():
                 s.session_dir = str(p)
+                s.annotator = s.get("annotator", "anon")
+                s.save_dir = s.get("save_dir", str(Path.home() / "OPCAL_LABELS"))
                 labels_csv = p / "labels.csv"
                 cell_map_csv = p / "cell_map.csv"
                 loaded = 0
@@ -277,18 +322,16 @@ def render_start_session(*, s):
                         loaded = len(s.label_map)
                     except Exception as e:
                         st.error(f"Failed to read labels.csv: {e}")
-                if cell_map_csv.exists() and not s.cell_ids:
+                if cell_map_csv.exists() and not s.get("cell_ids"):
                     try:
-                        df_map = pd.read_csv(cell_map_csv)
-                        df_map = df_map.sort_values("cell_index")
+                        df_map = pd.read_csv(cell_map_csv).sort_values("cell_index")
                         s.cell_ids = [str(x) for x in df_map["cell_id"].tolist()]
                     except Exception as e:
                         st.warning(f"Could not read cell_map.csv: {e}")
-                st.success(f"Loaded session from {p} ({loaded} labeled cells)")
-                s.stage = max(s.stage, 4)
-                st.rerun()
+                st.success(f"Loaded session from: {p} (loaded {loaded} labeled cells)")
             else:
-                st.warning("Enter a valid existing session directory path.")
+                st.warning("Please enter a valid existing session folder path.")
+        st.markdown('<div class="hint">Tip: This is useful when someone shared a session folder with you.</div>', unsafe_allow_html=True)
 
 def render_upload_and_indexing(*, s):
     st.header("Step 2 — Upload & indexing")
@@ -434,10 +477,6 @@ def render_upload_and_indexing(*, s):
             st.warning("Duplicate cell IDs detected. Consider a different mapping.")
         s.current_cell = 0
         st.success(f"Loaded traces: shape {s.traces.shape}. Mapping ready.")
-        st.session_state.stage = max(st.session_state.stage, 3)
-        if st.button("Proceed to parameters", key="btn_to_params"):
-            st.session_state.stage = 3
-            st.rerun()
 
 def render_params(*, s):
     st.header("Step 3 — Labeling parameters")
@@ -452,5 +491,3 @@ def render_params(*, s):
     if st.button("Confirm labeling parameters", key="btn_stage3_confirm"):
         s.params_confirmed = True
         st.success("Parameters confirmed. Proceed to labeling.")
-        s.stage = max(s.stage, 4)
-        st.rerun()

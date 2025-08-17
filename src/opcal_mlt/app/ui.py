@@ -21,8 +21,9 @@ def inject_theme_css(palette: dict) -> None:
           background: var(--panel) !important;
           border-right: 1px solid var(--border);
         }}
-        [data-testid="stToolbar"], [data-testid="stStatusWidget"], #MainMenu, header, footer {{visibility: hidden !important;}}
-        .block-container {{padding-top: 1rem;}}
+        [data-testid="stStatusWidget"], #MainMenu, footer {{visibility: hidden !important;}}
+        .block-container {{padding-top: 1.25rem;}}
+        h1, h2, h3 {{overflow: visible !important;}}
         .stMarkdown p, label, .stTextInput>div>div>input {{font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji';}}
         .small-muted {{color: var(--muted); font-size:0.85rem;}}
         .app-title {{display:flex; flex-direction:column; gap:2px;}}
@@ -32,6 +33,7 @@ def inject_theme_css(palette: dict) -> None:
         .top-right-logo {{position: absolute; top: 16px; right: 20px; width: 96px; max-width: 20vw;}}
         .hint {{margin: 0.25rem 0 0.75rem 0; color: var(--muted); font-size: 0.95rem;}}
         .disabled-pane {{opacity: .45; pointer-events: none; filter: grayscale(20%);}}
+        .stepper {{overflow: visible;}}
         </style>
         """,
         unsafe_allow_html=True,
@@ -41,7 +43,6 @@ def render_stepper_and_tips(stage: int) -> None:
     labels_steps = [
         "Start new session",
         "Upload & indexing",
-        "Labeling parameters",
         "Label files",
         "Finish & export",
     ]
@@ -60,8 +61,7 @@ def render_stepper_and_tips(stage: int) -> None:
           <div class="step {'active' if current_step==1 else ('done' if current_step>1 else '')}"><div class="num">1</div><div>{labels_steps[0]}</div></div>
           <div class="step {'active' if current_step==2 else ('done' if current_step>2 else '')}"><div class="num">2</div><div>{labels_steps[1]}</div></div>
           <div class="step {'active' if current_step==3 else ('done' if current_step>3 else '')}"><div class="num">3</div><div>{labels_steps[2]}</div></div>
-          <div class="step {'active' if current_step==4 else ('done' if current_step>4 else '')}"><div class="num">4</div><div>{labels_steps[3]}</div></div>
-          <div class="step {'active' if current_step==5 else ''}"><div class="num">5</div><div>{labels_steps[4]}</div></div>
+          <div class="step {'active' if current_step==4 else ''}"><div class="num">4</div><div>{labels_steps[3]}</div></div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -71,8 +71,6 @@ def render_stepper_and_tips(stage: int) -> None:
     elif current_step == 2:
         st.markdown('<div class="hint"><b>Tip:</b> Upload a CSV/NPZ and choose how to assign cell IDs (from file or auto-generate).</div>', unsafe_allow_html=True)
     elif current_step == 3:
-        st.markdown('<div class="hint"><b>Tip:</b> Adjust smoothing, baseline and thresholds. Confirm when ready.</div>', unsafe_allow_html=True)
-    elif current_step == 4:
         st.markdown('<div class="hint"><b>Tip:</b> Navigate cells, assign labels and notes. You can undo the last save.</div>', unsafe_allow_html=True)
     else:
         st.markdown('<div class="hint"><b>Tip:</b> Export a ZIP archive of the session folder for sharing or backup.</div>', unsafe_allow_html=True)

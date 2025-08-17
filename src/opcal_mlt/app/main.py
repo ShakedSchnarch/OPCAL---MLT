@@ -12,7 +12,7 @@ import pandas as pd
 from pathlib import Path
 from datetime import datetime, timezone
 from opcal_mlt.app.ui import inject_theme_css, render_stepper_and_tips
-from opcal_mlt.app.screens import render_labeling_workspace, render_finish_export, render_start_session, render_upload_and_indexing, render_params
+from opcal_mlt.app.screens import render_labeling_workspace, render_finish_export, render_start_session, render_upload_and_indexing
 try:
     # New name (preferred)
     from opcal_mlt.core.schemas import PreprocessConfig
@@ -20,10 +20,23 @@ except ImportError:  # Backward-compatibility with older versions
     from opcal_mlt.core.schemas import PreprocessSettings as PreprocessConfig
 from opcal_mlt.app.session_io import make_session_dir, write_session_header, write_cell_map, append_labels, append_peaks, now_utc_iso
 s = st.session_state
-s.setdefault("stage", 1)               # 1=Start, 2=Upload, 3=Params, 4=Label, 5=Finish
+# Hard guards (in addition to setdefault below)
+if "label_map" not in s or not isinstance(s.get("label_map"), dict):
+    s["label_map"] = {}
+if "current_cell" not in s:
+    s["current_cell"] = 0
+# Ensure annotator/save_dir always present for navigation logic
+s.setdefault("annotator", "")
+s.setdefault("save_dir", "")
+s.setdefault("stage", 1)               # 1=Start, 2=Upload, 3=Label, 4=Finish
 s.setdefault("params_confirmed", False)
 s.setdefault("export_done", False)
 s.setdefault("recording_id", "")
+s.setdefault("label_map", {})
+s.setdefault("current_cell", 0)
+s.setdefault("traces", None)
+s.setdefault("cell_ids", None)
+s.setdefault("session_dir", "")
 
 
 # --- App metadata & constants ---
@@ -126,43 +139,17 @@ st.markdown(
 
 inject_theme_css(THEMES[st.session_state.get("theme", "Light")])
 
-# --- Top stepper (5 stages) ---
-# Infer stage conservatively based on existing flags, but never downgrade the user's explicit navigation.
-# We only advance the stage if prerequisites for the *next* stage are already satisfied.
+# --- Top stepper (4 stages) ---
+# We avoid auto-advancing; Next/Back control navigation. Only guard against entering Labeling without data.
 cur = int(s.get("stage", 1))
-# If we haven't uploaded yet, max is 1 (Start) or 2 (Upload)
-if cur <= 1:
-    s.stage = 1
-elif cur == 2 and s.get("traces") is None:
+if cur == 3 and (s.get("traces") is None or s.get("cell_ids") is None):
+    # If user jumped to labeling without data, send back to Upload
     s.stage = 2
-elif cur <= 3 and not s.get("params_confirmed"):
-    s.stage = 3
-elif cur <= 4 and not s.get("export_done"):
-    # Reaching stage 4 (labeling) requires a session_dir, but we allow the user to *arrive* at step 4 UI only
-    # after upload + params are confirmed; the session folder will be created automatically once traces exist.
-    s.stage = 4 if (s.get("traces") is not None and s.get("params_confirmed")) else 3
 else:
-    s.stage = 5
+    s.stage = cur
 
-labels_steps = ["Start new session", "Upload & indexing", "Labeling parameters", "Label files", "Finish & export"]
 current_step = int(s.stage)
 render_stepper_and_tips(current_step)
-
-# Navigation controls
-req_ready = {
-    1: bool(s.get("annotator") and s.get("save_dir")),  # after Start/Update in step 1
-    2: bool(s.get("traces") is not None),               # after upload in step 2
-    3: bool(s.get("params_confirmed")),                 # after confirm in step 3
-    4: True,
-    5: False,
-}
-nav_left, nav_right = st.columns([1,1])
-if nav_left.button("Back", key="btn_stage_back", disabled=(current_step <= 1)):
-    s.stage = max(1, current_step - 1)
-    st.rerun()
-if nav_right.button("Next", key="btn_stage_next", disabled=not req_ready.get(current_step, False)):
-    s.stage = min(5, current_step + 1)
-    st.rerun()
 
 
 # --- Create session folder once traces & user meta exist (no sidebar flow) ---
@@ -190,30 +177,38 @@ if s.get("annotator") and s.get("save_dir") and (s.get("traces") is not None) an
     _log(f"session_start annotator={s.annotator} recording_id={rec_id}")
 
 # --- Stage router: show only the current stage screen ---
-from opcal_mlt.app.screens import render_start_session, render_upload_and_indexing, render_params
 if s.stage == 1:
     render_start_session(s=s)
 elif s.stage == 2:
     render_upload_and_indexing(s=s)
 elif s.stage == 3:
-    render_params(s=s)
-elif s.stage >= 4 and s.get("traces") is not None and s.get("session_dir"):
-    params = {
-        "fs_hz": float(s.get("fs_hz", 10.0)),
-        "smooth": bool(s.get("smooth", True)),
-        "window": int(s.get("window", 31)),
-        "poly": int(s.get("poly", 3)),
-        "baseline_method": str(s.get("baseline_method", "rolling_median")),
-        "window_s": int(s.get("window_s", 20)),
-        "k": float(s.get("k", 3.0)),
-        "stim_time_s": float(s.get("stim_time_s", 5.0)),
-    }
     theme = THEMES[st.session_state.get("theme", "Light")]
-    render_labeling_workspace(s=s, params=params, theme=theme, logger=_log)
+    render_labeling_workspace(s=s, theme=theme, logger=_log)
+elif s.stage == 4:
     render_finish_export(st.session_state)
 else:
     st.info("Follow the steps above to begin.")
 
-# --- Footer & legal note ---
+
+# --- Bottom navigation ---
 st.markdown("---")
+req_ready = {
+    1: bool(s.get("annotator") and s.get("save_dir")),
+    2: bool(s.get("traces") is not None and s.get("cell_ids") is not None),
+    3: True,   # allow proceeding to Finish & export
+    4: False,
+}
+c_back, c_sp, c_next = st.columns([1,8,1])
+back_disabled = (int(s.stage) <= 1)
+next_disabled = not req_ready.get(int(s.stage), False)
+with c_back:
+    if st.button("Back", key="nav_back", use_container_width=True, disabled=back_disabled):
+        s.stage = max(1, int(s.stage) - 1)
+        st.rerun()
+with c_next:
+    if st.button("Next", key="nav_next", use_container_width=True, disabled=next_disabled):
+        s.stage = min(4, int(s.stage) + 1)
+        st.rerun()
+
+# --- Footer & legal note ---
 st.markdown("<div class='small-muted'>OPCAL‑Labeler • Local labeling tool • MIT/BSD‑style license. No telemetry. Data stays local.</div>", unsafe_allow_html=True)
