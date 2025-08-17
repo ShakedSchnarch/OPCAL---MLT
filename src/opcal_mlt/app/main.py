@@ -162,7 +162,6 @@ else:
 current_step = int(s.stage)
 render_stepper_and_tips(current_step)
 
-
 # === Create session folder (once traces + metadata exist) ===
 if s.get("annotator") and s.get("save_dir") and (s.get("traces") is not None) and not s.get("session_dir"):
     base_dir = Path(s.save_dir)

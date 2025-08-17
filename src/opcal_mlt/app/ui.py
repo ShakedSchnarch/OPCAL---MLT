@@ -21,11 +21,37 @@ def inject_theme_css(palette: dict) -> None:
           background: var(--panel) !important;
           border-right: 1px solid var(--border);
         }}
+        /* Sidebar width: keep it compact so plots aren't squashed */
+        [data-testid="stSidebar"] {{
+          width: 320px !important;
+          min-width: 320px !important;
+        }}
+        /* Some Streamlit builds wrap the content in an inner container */
+        [data-testid="stSidebar"] section[tabindex="0"] {{
+          width: 320px !important;
+          min-width: 320px !important;
+        }}
         [data-testid="stStatusWidget"], #MainMenu, footer {{visibility: hidden !important;}}
+        [data-testid="stToolbar"] {{ display: none !important; }}
         .block-container {{padding-top: 3.2rem;}}
         h1, h2, h3 {{overflow: visible !important;}}
         .stMarkdown p, label, .stTextInput>div>div>input {{
           font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji';
+        }}
+        /* Text inputs: ensure visible, bordered, padded, white background */
+        div[data-testid="stTextInput"] input {{
+          background-color: #fff !important;
+          border: 1px solid #ccc !important;
+          padding: 6px 10px !important;
+          color: var(--text) !important;
+          opacity: 1 !important;
+        }}
+        .stTextInput input {{
+          background-color: #fff !important;
+          border: 1px solid #ccc !important;
+          padding: 6px 10px !important;
+          color: var(--text) !important;
+          opacity: 1 !important;
         }}
 
         /* App title */
@@ -37,6 +63,8 @@ def inject_theme_css(palette: dict) -> None:
         .block-container > div:first-child {{background: var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px 18px;}}
         .top-right-logo {{position: absolute; top: 16px; right: 20px; width: 96px; max-width: 20vw;}}
         .hint {{margin: 0.25rem 0 0.75rem 0; color: var(--muted); font-size: 0.95rem;}}
+
+        .step-header {{ font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0 0.75rem; }}
 
         /* Stepper */
         .stepper {{display:flex;gap:12px;margin:10px 0 12px 0;flex-wrap:wrap; justify-content:center;}}
@@ -57,7 +85,7 @@ def inject_theme_css(palette: dict) -> None:
 
 def render_stepper_and_tips(stage: int) -> None:
     labels_steps = [
-        "Start new session",
+        "Start session",
         "Upload & indexing",
         "Label files",
         "Finish & export",
@@ -83,7 +111,10 @@ def render_stepper_and_tips(stage: int) -> None:
         unsafe_allow_html=True,
     )
     if current_step == 1:
-        st.markdown('<div class="hint"><b>Tip:</b> Set annotator and save folder, then start a new session.</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="hint"><b>Tip:</b> Set annotator and save folder, then start a new session — or resume/load an existing one.</div>',
+            unsafe_allow_html=True,
+        )
     elif current_step == 2:
         st.markdown('<div class="hint"><b>Tip:</b> Upload a CSV/NPZ and choose how to assign cell IDs (from file or auto-generate).</div>', unsafe_allow_html=True)
     elif current_step == 3:

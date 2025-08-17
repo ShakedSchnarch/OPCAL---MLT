@@ -222,6 +222,24 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
     - history: List[Tuple[cell_index, previous_label_or_None]] for undo
     - fs_hz, smooth, window, poly, baseline_method, window_s, k, stim_time_s: parameters
     """
+    # Utility: reopen sidebar if the user collapsed it
+    if st.button("Show sidebar", key="btn_show_sidebar_step3"):
+        # Click Streamlit's built-in sidebar toggle via a small JS snippet, only when collapsed
+        st.markdown(
+            """
+            <script>
+            (function() {
+              const doc = window.parent.document;
+              const sidebar = doc.querySelector('[data-testid="stSidebar"]');
+              const toggle = doc.querySelector('[data-testid="stSidebarCollapseButton"]') || doc.querySelector('[data-testid="baseButton-toggleSidebar"]');
+              if (!sidebar || !toggle) return;
+              const isCollapsed = sidebar.offsetWidth < 50; // heuristic for collapsed state
+              if (isCollapsed) { toggle.click(); }
+            })();
+            </script>
+            """,
+            unsafe_allow_html=True,
+        )
     # Safety: initialize state keys used below
     if "label_map" not in s or not isinstance(s.label_map, dict):
         s.label_map = {}
@@ -322,7 +340,7 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
     stim_time_s= float(s.get("stim_time_s", 5.0))
 
     T, N = s.traces.shape
-    left, mid, right = st.columns([1, 2, 1], gap="large")
+    left, mid, right = st.columns([1, 3, 1], gap="large")
 
     # -------- Left: navigation & progress --------
     with left:
@@ -495,12 +513,12 @@ def render_start_session(*, s):
     - session_dir: str (path to a specific session — set by resume/load)
     - label_map, cell_ids: hydrated on resume/load when CSVs are found
     """
-
-    st.header("Step 1 — Start new session")
-    st.caption("Pick one action to initialize or restore your working session.")
+    st.markdown('<div class="step-header">Step 1 — Start session</div>', unsafe_allow_html=True)    st.caption("Pick one action to initialize or restore your working session.")
+    import pathlib as _pl  # Use local alias to avoid any accidental shadowing of Path inside this function
 
     # Unified chooser for clarity — hide Resume when no valid session exists
-    def _has_resumable_session(base_root: Path) -> bool:
+    # Remove any local 'from pathlib import Path' (if present) in this function
+    def _has_resumable_session(base_root: _pl.Path) -> bool:
         """Return True if a valid session folder exists under base_root.
         A folder is considered valid if it contains either labels.csv or session.csv.
         """
@@ -517,8 +535,8 @@ def render_start_session(*, s):
             return False
 
     # Determine the save root to scan
-    _default_root = Path.home() / "OPCAL_LABELS"
-    _base_root = Path(str(s.get("save_dir", str(_default_root))).strip()).expanduser()
+    _default_root = _pl.Path.home() / "OPCAL_LABELS"
+    _base_root = _pl.Path(str(s.get("save_dir", str(_default_root))).strip()).expanduser()
     _has_resume = _has_resumable_session(_base_root)
     s["_resume_available"] = _has_resume
 
@@ -542,7 +560,7 @@ def render_start_session(*, s):
     if choice == "New session":
         st.markdown("### New session")
         st.caption("Set your annotator ID and where sessions are saved. This does not create files yet; they are created when data is uploaded.")
-        default_root = s.get("save_dir", str(Path.home() / "OPCAL_LABELS"))
+        default_root = (s.get("save_dir") or str(_pl.Path.home() / "OPCAL_LABELS"))
 
         # Initialize backing keys before rendering widgets to avoid Streamlit key mutation errors.
         if "use_default_savedir" not in st.session_state:
@@ -550,15 +568,18 @@ def render_start_session(*, s):
         if "start_savedir" not in st.session_state:
             st.session_state["start_savedir"] = default_root
 
-        annotator = st.text_input("Annotator ID", value=s.get("annotator", ""), key="start_annotator")
+        annotator_val = st.text_input(
+            "Annotator ID",
+            value=s.get("annotator", ""),
+            key="start_annotator",
+            placeholder="Enter annotator ID",
+        ).strip()
 
         # Default-location toggle (placed above the path input)
         use_default = st.checkbox(
             "Use default (~/OPCAL_LABELS)",
             key="use_default_savedir",
             help="When checked, the default folder will be used for the session. Uncheck to choose a custom folder path.")
-
-        # default_root assignment already above; remove duplicate
 
         # Show a *disabled* field when using default, otherwise a normal editable input.
         if use_default:
@@ -578,13 +599,21 @@ def render_start_session(*, s):
                 disabled=False,
                 help="Folder where session subfolders will be created.")
 
-        if st.button("Start", type="primary", key="btn_start_new_session", use_container_width=True):
+        # Determine prospective root without side effects for validation
+        chosen_root_preview = default_root if use_default else st.session_state.get("start_savedir", default_root)
+        # Use whichever is populated: the immediate input return or session state (Streamlit keeps widget state under the key)
+        annotator_current = (st.session_state.get("start_annotator") or annotator_val or "").strip()
+        valid_annot = len(annotator_current) > 0
+        valid_root = len(str(chosen_root_preview).strip()) > 0
+        start_disabled = not (valid_annot and valid_root)
+
+        if st.button("Start", type="primary", key="btn_start_new_session", use_container_width=True, disabled=start_disabled):
             # Determine the effective root without mutating widget keys post-creation
             chosen_root = default_root if use_default else st.session_state.get("start_savedir", default_root)
-            root = Path(chosen_root).expanduser()
+            root = _pl.Path(chosen_root).expanduser()
             try:
                 root.mkdir(parents=True, exist_ok=True)
-                s.annotator = (annotator or "anon").strip()
+                s.annotator = (annotator_val or "anon")
                 s.save_dir = str(root)
                 st.success("Settings saved — you can proceed to Upload.")
             except Exception as e:
@@ -594,10 +623,10 @@ def render_start_session(*, s):
     elif choice == "Resume recent session":
         st.markdown("### Resume recent session")
         st.caption("We look under your Save directory for the most recent session folders that contain labels.csv.")
-        base_root = st.text_input("Save directory", value=s.get("save_dir", str(Path.home() / "OPCAL_LABELS")), key="resume_savedir")
+        base_root = st.text_input("Save directory", value=s.get("save_dir", str(_pl.Path.home() / "OPCAL_LABELS")), key="resume_savedir")
         # Heuristic: scan <save_dir>/<recording>/<session> and pick those with labels.csv (latest first).
         recent = []
-        base = Path(base_root.strip())
+        base = _pl.Path(base_root.strip())
         if base.exists():
             for rec_dir in base.iterdir():
                 if rec_dir.is_dir():
@@ -613,14 +642,16 @@ def render_start_session(*, s):
         if recent:
             options = [f"{p.parent.name} / {p.name}" for _, p in recent]
             sel = st.selectbox("Pick a session", options, index=0, key="resume_pick")
-            if st.button("Start", type="primary", key="btn_start_resume", use_container_width=True):
+            # Enable only if we actually found candidates
+            start_resume_disabled = (len(recent) == 0)
+            if st.button("Start", type="primary", key="btn_start_resume", use_container_width=True, disabled=start_resume_disabled):
                 try:
                     p = recent[options.index(sel)][1]
                     s.session_dir = str(p)
                     # Ensure annotator/save_dir present so Next can enable
                     s.annotator = (s.get("annotator") or "anon")
                     # Prefer the typed base_root; otherwise keep existing save_dir or fall back to default under HOME
-                    default_root = str(Path.home() / "OPCAL_LABELS")
+                    default_root = str(_pl.Path.home() / "OPCAL_LABELS")
                     base_root_clean = base_root.strip()
                     s.save_dir = base_root_clean or s.get("save_dir") or default_root
                     # Load existing state (labels + optional cell_map)
@@ -648,43 +679,77 @@ def render_start_session(*, s):
         st.markdown('<div class="hint">Tip: Change the Save directory above if your sessions are stored elsewhere.</div>', unsafe_allow_html=True)
 
     # --- Load session by path ---
-    else:
-        st.markdown("### Load session from path")
-        st.caption("Paste a full path to an existing session folder (the folder that contains labels.csv).")
-        load_path = st.text_input("Existing session folder path", value=s.get("load_session_dir", ""), key="load_path")
-        if st.button("Start", type="primary", key="btn_start_load", use_container_width=True):
-            p = Path(load_path.strip())
-            if p.exists() and p.is_dir():
+    elif choice == "Load session from path":
+
+        # Text field to choose a session folder
+        session_dir = st.text_input(
+            "Session folder",
+            value=str(s.get("session_dir", "")),
+            help="Pick a folder that contains 'labels.csv' or 'session.csv' to load an existing session.",
+        )
+
+        # Pre-validate to control the button state
+        _typed_path = str(session_dir or "").strip()
+        _pre_valid = False
+        def _is_valid_session_dir(p: _pl.Path) -> bool:
+            try:
+                return p.is_dir() and (
+                    (p / "labels.csv").exists() or (p / "session.csv").exists()
+                )
+            except Exception:
+                return False
+        if _typed_path:
+            try:
+                _pre_valid = _is_valid_session_dir(_pl.Path(_typed_path).expanduser())
+            except Exception:
+                _pre_valid = False
+
+        load_btn = st.button("Load session", disabled=(not _pre_valid))
+
+        # Small helper to validate a session directory
+
+        if load_btn:
+            p = _pl.Path(session_dir).expanduser()
+
+            # Validate before attempting to load
+            if not _is_valid_session_dir(p):
+                st.error("Selected folder does not contain 'labels.csv' or 'session.csv'. Please choose a valid session directory.")
+                st.stop()
+
+            # Persist and try to hydrate state from disk
+            try:
                 s.session_dir = str(p)
-                s.annotator = (s.get("annotator") or "anon")
-                # Try to infer a logical save_dir from the chosen session path:
-                # expected structure: <save_root>/<recording_id>/<session_id>
+                # Derive save_dir as the grand‑parent (…/save_dir/<recording>/<session>) when possible
                 try:
-                    inferred_root = str(p.parent.parent)
+                    s.save_dir = str(p.parent.parent)
                 except Exception:
-                    inferred_root = ""
-                default_root = str(Path.home() / "OPCAL_LABELS")
-                s.save_dir = inferred_root or s.get("save_dir") or default_root
-                labels_csv = p / "labels.csv"
-                cell_map_csv = p / "cell_map.csv"
+                    # Fall back to HOME/OPCAL_LABELS if unexpected layout
+                    s.save_dir = str(_pl.Path.home() / "OPCAL_LABELS")
+                # Ensure annotator present so navigation can proceed
+                s.annotator = (s.get("annotator") or "anon")
+
+                # Load labels and optional cell map (best‑effort)
                 loaded = 0
-                if labels_csv.exists():
-                    try:
-                        df_lab = pd.read_csv(labels_csv)
-                        s.label_map = {int(r.cell_index): {"label": str(r.label), "notes": str(r.notes) if not pd.isna(r.notes) else ""} for r in df_lab.itertuples(index=False)}
-                        loaded = len(s.label_map)
-                    except Exception as e:
-                        st.error(f"Failed to read labels.csv: {e}")
-                if cell_map_csv.exists() and not s.get("cell_ids"):
-                    try:
-                        df_map = pd.read_csv(cell_map_csv).sort_values("cell_index")
+                try:
+                    df_lab = pd.read_csv(p / "labels.csv")
+                    s.label_map = {int(r.cell_index): {"label": str(r.label), "notes": ("" if pd.isna(getattr(r, "notes", None)) else str(getattr(r, "notes", "")))} for r in df_lab.itertuples(index=False)}
+                    loaded = len(s.label_map)
+                except Exception:
+                    # No labels or failed to read; keep empty map
+                    s.label_map = s.get("label_map", {}) or {}
+                try:
+                    if not s.get("cell_ids"):
+                        df_map = pd.read_csv(p / "cell_map.csv").sort_values("cell_index")
                         s.cell_ids = [str(x) for x in df_map["cell_id"].tolist()]
-                    except Exception as e:
-                        st.warning(f"Could not read cell_map.csv: {e}")
-                st.success(f"Loaded session from: {p} (loaded {loaded} labeled cells)")
-            else:
-                st.warning("Please enter a valid existing session folder path.")
-        st.markdown('<div class="hint">Tip: This is useful when someone shared a session folder with you.</div>', unsafe_allow_html=True)
+                except Exception:
+                    pass
+
+                st.success(f"Session loaded successfully from: {p}\n\nLoaded {loaded} labeled cells.")
+            except Exception as e:
+                st.error(f"Failed to load session: {e}")
+            s["session_dir"] = str(p)
+            st.success("Folder looks valid. Loading session…")
+            # The existing code that actually reads files and restores state continues here
 
 def render_upload_and_indexing(*, s):
     """
