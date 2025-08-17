@@ -20,7 +20,7 @@ try:
 except ImportError:  # Backward-compatibility with older versions
     from opcal_mlt.core.schemas import PreprocessSettings as PreprocessConfig
 from opcal_mlt.core.io import save_jsonl
-from opcal_mlt.session_io import make_session_dir, write_session_header, write_cell_map, append_labels, append_peaks, now_utc_iso
+from opcal_mlt.app.session_io import make_session_dir, write_session_header, write_cell_map, append_labels, append_peaks, now_utc_iso
 
 # --- App metadata & constants ---
 APP_NAME = "OPCAL‑Labeler"

@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-opcal-mlt = "opcal_mlt.launch:main"
+opcal-mlt = "opcal_mlt.app.launch:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
