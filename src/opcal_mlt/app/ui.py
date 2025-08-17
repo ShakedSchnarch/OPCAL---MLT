@@ -26,6 +26,13 @@ def inject_theme_css(palette: dict) -> None:
           width: 320px !important;
           min-width: 320px !important;
         }}
+        /* Force sidebar to be visible by default; allow collapsing via a body class */
+        /* (removed default forced visible rule to allow full collapse) */
+        body.sb-collapsed [data-testid="stSidebar"] {{
+          transform: translateX(-110%) !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+        }}
         /* Some Streamlit builds wrap the content in an inner container */
         [data-testid="stSidebar"] section[tabindex="0"] {{
           width: 320px !important;

@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 import plotly.graph_objects as go
 
 from opcal_mlt.core import preprocess as pp
@@ -222,24 +223,118 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
     - history: List[Tuple[cell_index, previous_label_or_None]] for undo
     - fs_hz, smooth, window, poly, baseline_method, window_s, k, stim_time_s: parameters
     """
-    # Utility: reopen sidebar if the user collapsed it
-    if st.button("Show sidebar", key="btn_show_sidebar_step3"):
-        # Click Streamlit's built-in sidebar toggle via a small JS snippet, only when collapsed
-        st.markdown(
-            """
-            <script>
-            (function() {
-              const doc = window.parent.document;
-              const sidebar = doc.querySelector('[data-testid="stSidebar"]');
-              const toggle = doc.querySelector('[data-testid="stSidebarCollapseButton"]') || doc.querySelector('[data-testid="baseButton-toggleSidebar"]');
-              if (!sidebar || !toggle) return;
-              const isCollapsed = sidebar.offsetWidth < 50; // heuristic for collapsed state
-              if (isCollapsed) { toggle.click(); }
-            })();
-            </script>
-            """,
-            unsafe_allow_html=True,
-        )
+    # Ensure sidebar is visible on entering step 3 and provide floating collapse/reopen buttons
+    components.html(
+        """
+        <style>
+          /* Floating buttons */
+          #openSidebarBtn, #collapseSidebarBtn {
+            position: fixed; z-index: 9999; width: 36px; height: 36px; border-radius: 18px;
+            border: 1px solid #ccc; background: #fff; color: #111; box-shadow: 0 2px 6px rgba(0,0,0,.12);
+            display: none; align-items: center; justify-content: center; cursor: pointer; user-select: none;
+            text-align: center; line-height: 36px;
+          }
+          #openSidebarBtn:hover, #collapseSidebarBtn:hover { box-shadow: 0 4px 10px rgba(0,0,0,.18); }
+          /* Positions (collapse btn will be adjusted dynamically) */
+          #openSidebarBtn { top: 110px; left: 14px; }
+          #collapseSidebarBtn { top: 110px; left: 334px; }
+        </style>
+        <script>
+        (function() {
+          const doc = window.parent.document;
+          const getSB = () => doc.querySelector('[data-testid="stSidebar"]');
+          if (!getSB()) return;
+
+          // --- Helpers to force states explicitly (inline styles) ---
+          function setOpenStyles() {
+            const el = getSB();
+            if (!el) return;
+            el.style.visibility = 'visible';
+            el.style.transform = 'none';
+            el.style.left = '0px';
+            el.style.marginLeft = '0';
+            el.style.width = '320px';
+            el.style.minWidth = '320px';
+            el.style.opacity = '';
+            el.style.pointerEvents = '';
+          }
+          function setCollapsedStyles() {
+            const el = getSB();
+            if (!el) return;
+            // Collapse via inline transform to guarantee effect
+            el.style.transform = 'translateX(-110%)';
+            el.style.opacity = '0';
+            el.style.pointerEvents = 'none';
+          }
+
+          function isCollapsed() {
+            const el = getSB();
+            if (!el) return false;
+            const r = el.getBoundingClientRect();
+            const cs = window.getComputedStyle(el);
+            return (r.width < 100) || (r.left < 0) || (cs.opacity === '0') || (cs.transform && cs.transform !== 'none') || doc.body.classList.contains('sb-collapsed');
+          }
+
+          // Ensure sidebar starts open on entering step 3
+          doc.body.classList.remove('sb-collapsed');
+          setOpenStyles();
+
+          // Create buttons once in the PARENT document
+          let openBtn = doc.getElementById('openSidebarBtn');
+          if (!openBtn) {
+            openBtn = doc.createElement('div');
+            openBtn.id = 'openSidebarBtn';
+            openBtn.title = 'Show sidebar';
+            openBtn.innerHTML = '\u00AB\u00AB'; // ««
+            doc.body.appendChild(openBtn);
+          }
+          let collapseBtn = doc.getElementById('collapseSidebarBtn');
+          if (!collapseBtn) {
+            collapseBtn = doc.createElement('div');
+            collapseBtn.id = 'collapseSidebarBtn';
+            collapseBtn.title = 'Hide sidebar';
+            collapseBtn.innerHTML = '\u00BB\u00BB'; // »»
+            doc.body.appendChild(collapseBtn);
+          }
+
+          // Wire buttons
+          openBtn.onclick = () => { doc.body.classList.remove('sb-collapsed'); setOpenStyles(); tick(); };
+          collapseBtn.onclick = () => { doc.body.classList.add('sb-collapsed'); setCollapsedStyles(); tick(); };
+
+          // If Streamlit exposes a built-in toggle, hook it
+          const builtin = doc.querySelector('[data-testid="stSidebarCollapseButton"], [data-testid="baseButton-toggleSidebar"]');
+          if (builtin) {
+            builtin.addEventListener('click', () => {
+              setTimeout(() => { tick(); }, 50);
+            });
+          }
+
+          function positionCollapseBtn() {
+            // Keep collapse button aligned to the sidebar edge
+            const el = getSB();
+            if (!el) return;
+            const r = el.getBoundingClientRect();
+            collapseBtn.style.left = Math.max(14, r.right + 14) + 'px';
+          }
+
+          function tick() {
+            positionCollapseBtn();
+            if (isCollapsed()) {
+              openBtn.style.display = 'flex';
+              collapseBtn.style.display = 'none';
+            } else {
+              openBtn.style.display = 'none';
+              collapseBtn.style.display = 'flex';
+            }
+          }
+
+          tick();
+          const poll = setInterval(tick, 400);
+        })();
+        </script>
+        """,
+        height=0,
+    )
     # Safety: initialize state keys used below
     if "label_map" not in s or not isinstance(s.label_map, dict):
         s.label_map = {}
@@ -513,7 +608,8 @@ def render_start_session(*, s):
     - session_dir: str (path to a specific session — set by resume/load)
     - label_map, cell_ids: hydrated on resume/load when CSVs are found
     """
-    st.markdown('<div class="step-header">Step 1 — Start session</div>', unsafe_allow_html=True)    st.caption("Pick one action to initialize or restore your working session.")
+    st.markdown('<div class="step-header">Step 1 — Start session</div>', unsafe_allow_html=True)
+    st.caption("Pick one action to initialize or restore your working session.")
     import pathlib as _pl  # Use local alias to avoid any accidental shadowing of Path inside this function
 
     # Unified chooser for clarity — hide Resume when no valid session exists
@@ -807,10 +903,11 @@ def render_upload_and_indexing(*, s):
 
         # --- Choose mapping mode ---
         st.subheader("Cell ID mapping")
+        # Preferred default: Auto-generate IDs (top option)
         mode = st.radio(
             "Choose how to assign cell IDs",
-            ("Use column headers from CSV", "Import external mapping CSV", "Auto-generate IDs"),
-            index=(0 if has_useful_headers else 2),
+            ("Auto-generate IDs", "Use column headers from CSV", "Import external mapping CSV"),
+            index=0,
             key="idx_mode_csv",
             help="You can keep the CSV column names, import a mapping file with columns 'cell_index,cell_id', or generate IDs."
         )

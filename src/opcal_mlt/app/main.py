@@ -133,7 +133,7 @@ st.set_page_config(
         if _page_icon_obj is not None
         else (str(_favicon_path) if _favicon_path.exists() else None)
     ),
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 # Header + theme injection
