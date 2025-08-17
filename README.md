@@ -1,7 +1,5 @@
 # OPCAL Manual Labeling Tool (MLT)
 
-![alt text](image.png)
-
 **OPCAL-Labeler** is a professional, cross-platform manual labeling tool designed for calcium imaging traces in neuroscience research. It enables accurate and efficient annotation of calcium signals, supporting advanced data analysis workflows.
 
 The tool supports **six labeling classes**:  
@@ -11,12 +9,13 @@ The tool supports **six labeling classes**:
 
 ## 📦 Quick Start
 
-# Requires Python 3.10+
+```
+# Requires Python 3.12+
 pip install -e .
-# run (all OS)
 opcal-mlt
 # or (explicit)
-python -m streamlit run src/opcal/app/main.py
+python -m streamlit run src/opcal_mlt/app/main.py
+```
 
 ---
 
@@ -40,14 +39,26 @@ For data formats and API details, see [`API.md`](API.md).
 
 ## 🗂 File Structure
 ```
-.
-├── app/                  # Streamlit app entry point
-├── core/                 # Core processing logic
-├── examples/             # Example datasets
-├── scripts/              # Launcher scripts (.bat, .sh, .command, .ps1)
-├── tests/                # Unit tests
-├── README.md
-└── USER_GUIDE.md
+src/
+└── opcal_mlt/
+    ├── app/                  # Streamlit app (UI + launcher + session I/O)
+    │   ├── main.py
+    │   ├── launch.py
+    │   └── session_io.py
+    │   └── assets/
+    │       └── logo.png
+    └── core/                 # Core processing logic (algorithms, schemas, I/O)
+        ├── __init__.py
+        ├── features.py
+        ├── io.py
+        ├── peaks.py
+        ├── preprocess.py
+        └── schemas.py
+
+tests/
+examples/
+README.md
+USER_GUIDE.md
 ```
 
 ---
@@ -66,7 +77,7 @@ Each session creates:
 ---
 
 ## ⚙️ Requirements
-- **Python**: 3.10+  
+- **Python**: 3.12+  
 - **OS**: Windows, macOS, or Linux  
 - **Disk Space**: Minimum 200MB free for typical projects  
 
