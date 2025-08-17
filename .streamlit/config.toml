@@ -1,0 +1,15 @@
+[theme]
+base = "light"
+primaryColor = "#2563eb"
+backgroundColor = "#f7f9fb"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#111827"
+font = "sans serif"
+
+[server]
+runOnSave = true
+fileWatcherType = "auto"
+port = 8501
+
+[browser]
+gatherUsageStats = false

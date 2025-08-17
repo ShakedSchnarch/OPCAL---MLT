@@ -1,9 +1,9 @@
 """Unit tests for core preprocessing and peak detection utilities."""
 
 import numpy as np
-from opcal.core import preprocess as pp
-from opcal.core import peaks as pk
-from opcal.core import features as ft
+from opcal_mlt.core import preprocess as pp
+from opcal_mlt.core import peaks as pk
+from opcal_mlt.core import features as ft
 
 def test_threshold_nonempty():
     """Test that the threshold calculation returns an array of the correct shape for a simple signal."""

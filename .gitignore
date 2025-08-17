@@ -37,10 +37,19 @@ Thumbs.db
 htmlcov/
 .tox/
 .coverage
+.coverage.*
 coverage.xml
 
-# Streamlit cache
-.streamlit/
+# Type checking / lint caches
+.mypy_cache/
+.ruff_cache/
+
+# Streamlit
+.streamlit/*
+!.streamlit/config.toml
+# If you prefer to keep config and ignore only cache/secrets, comment the line above and use:
+# .streamlit/cache/
+# .streamlit/secrets.toml
 
 # Example/output data
 examples/__pycache__/
@@ -52,11 +61,11 @@ examples/*.hdf5
 *.env
 config.yaml
 
-# build artifacts
-dist/
-*.egg-info/
-build/
-# build artifacts
-/dist/
-/build/
-*.egg-info/
+# Local helper/backup files
+backup.patch
+*.bak
+
+# session artifacts
+OPCAL_LABELS*/
+Labeled signals*/
+*.zip

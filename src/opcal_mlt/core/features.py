@@ -75,3 +75,58 @@ def basic_features(
         "frac_above_thr": frac_above,
         "peaks_per_min": peaks_per_min,
     }
+
+# ---- Labeling summaries (UI-agnostic) ---------------------------------------
+from typing import Dict as _Dict, Tuple as _Tuple, List as _List, Any as _Any
+import pandas as _pd
+
+def summarize_labels(
+    label_map: _Dict[int, _Dict[str, _Any]],
+    cell_ids: _List[str] | None = None,
+    total_cells: int | None = None,
+) -> _Tuple[_pd.DataFrame, _pd.DataFrame]:
+    """Create a per-cell labels table and per-class statistics.
+
+    Parameters
+    ----------
+    label_map : dict
+        Mapping: cell_index -> {"label": str, "notes": str, ...}
+    cell_ids : list[str] | None
+        Optional cell id list (same order as traces columns). If provided,
+        it's included in the returned table.
+    total_cells : int | None
+        If given, percentages are computed against this number. Otherwise the
+        denominator is the number of labeled cells.
+
+    Returns
+    -------
+    labels_df : DataFrame
+        One row per labeled cell: cell_index, cell_id (optional), label, notes.
+    stats_df : DataFrame
+        Per-class count and percentage (0–100, rounded to 1 decimal place).
+    """
+    # Empty case
+    if not label_map:
+        labels_df = _pd.DataFrame(columns=["cell_index", "cell_id", "label", "notes"])  # empty
+        stats_df = _pd.DataFrame(columns=["label", "count", "percent"])
+        return labels_df, stats_df
+
+    # Build per-cell table
+    rows = []
+    for ci, meta in label_map.items():
+        ci_int = int(ci)
+        rows.append({
+            "cell_index": ci_int,
+            "cell_id": (cell_ids[ci_int] if (cell_ids is not None and 0 <= ci_int < len(cell_ids)) else None),
+            "label": str(meta.get("label", "")),
+            "notes": str(meta.get("notes", "")),
+        })
+    labels_df = _pd.DataFrame(rows).sort_values("cell_index").reset_index(drop=True)
+
+    # Aggregate per-class
+    counts = labels_df["label"].value_counts(dropna=False).rename_axis("label").reset_index(name="count")
+    denom = int(total_cells) if (total_cells is not None and total_cells > 0) else max(1, len(labels_df))
+    counts["percent"] = (counts["count"] / denom * 100.0).round(1)
+    stats_df = counts
+
+    return labels_df, stats_df

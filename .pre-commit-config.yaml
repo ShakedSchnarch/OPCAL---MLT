@@ -1,10 +1,34 @@
 repos:
+  # Black formatter
   - repo: https://github.com/psf/black
     rev: 24.8.0
-    hooks: [{id: black}]
+    hooks:
+      - id: black
+        language_version: python3.12
+
+  # Ruff linter + formatter
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.5.5
-    hooks: [{id: ruff}]
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+        language_version: python3.12
+      - id: ruff-format
+        language_version: python3.12
+
+  # Static typing
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.10.0
-    hooks: [{id: mypy}]
+    hooks:
+      - id: mypy
+        args: ["--python-version=3.12"]
+        additional_dependencies: ["pydantic>=2"]
+
+  # General hygiene hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
