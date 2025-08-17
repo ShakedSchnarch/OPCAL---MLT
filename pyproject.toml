@@ -3,7 +3,7 @@ name = "opcal-mlt"
 version = "0.3.1"
 description = "OPCAL-Labeler: manual labeling tool for calcium imaging traces"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 authors = [{ name = "OPCAL Team" }]
 
 dependencies = [
@@ -20,13 +20,26 @@ dependencies = [
 [project.scripts]
 opcal-mlt = "opcal_mlt.app.launch:main"
 
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "black>=24.0",
+  "ruff>=0.4",
+  "watchdog>=4.0"
+]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["opcal*"]
+include = ["opcal_mlt*"]
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-data]
+"opcal_mlt" = []
+"opcal_mlt.app.assets" = ["*.png"]
+"opcal_mlt.app.config" = ["*.toml"]

@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from opcal_mlt.core import preprocess as pp
 from opcal_mlt.core import peaks as pk
 from opcal_mlt.core import features as ft
+from opcal_mlt.app.ui import inject_theme_css, render_stepper_and_tips
 try:
     # New name (preferred)
     from opcal_mlt.core.schemas import PreprocessConfig
@@ -21,10 +22,15 @@ except ImportError:  # Backward-compatibility with older versions
     from opcal_mlt.core.schemas import PreprocessSettings as PreprocessConfig
 from opcal_mlt.core.io import save_jsonl
 from opcal_mlt.app.session_io import make_session_dir, write_session_header, write_cell_map, append_labels, append_peaks, now_utc_iso
+s = st.session_state
+s.setdefault("stage", 1)               # 1=Start, 2=Upload, 3=Params, 4=Label, 5=Finish
+s.setdefault("params_confirmed", False)
+s.setdefault("export_done", False)
+
 
 # --- App metadata & constants ---
 APP_NAME = "OPCAL‑Labeler"
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.3.1"
 LABELS = [
     "High-flat",
     "High-oscillatory",
@@ -33,6 +39,42 @@ LABELS = [
     "Uncertain",
     "Drifting",
 ]
+
+# ---- Theming (light/dark) ----
+THEMES = {
+    "Light": {
+        "bg": "#f7f9fb",
+        "panel": "#ffffff",
+        "border": "#e6edf3",
+        "text": "#111827",
+        "muted": "#6b7280",
+        "accent": "#2563eb",
+        "ok": "#2ca02c",
+        "warn": "#d97706",
+        "err": "#dc2626",
+        "shade_pre": "rgba(0,160,0,0.14)",
+        "shade_post": "rgba(200,0,0,0.14)",
+        "status_unlabeled": "#d1d5db",
+        "status_labeled": "#2ca02c",
+        "plotly_tpl": "plotly_white",
+    },
+    "Dark": {
+        "bg": "#0f172a",
+        "panel": "#0b1220",
+        "border": "#1f2a44",
+        "text": "#e5e7eb",
+        "muted": "#9ca3af",
+        "accent": "#60a5fa",
+        "ok": "#34d399",
+        "warn": "#f59e0b",
+        "err": "#f87171",
+        "shade_pre": "rgba(16,185,129,0.16)",
+        "shade_post": "rgba(239,68,68,0.16)",
+        "status_unlabeled": "#334155",
+        "status_labeled": "#34d399",
+        "plotly_tpl": "plotly_dark",
+    },
+}
 
 def _log(msg: str):
     """Append a timestamped message to the current session's log file (if a session is active)."""
@@ -67,7 +109,7 @@ st.set_page_config(
     page_icon=(
         _page_icon_obj
         if _page_icon_obj is not None
-        else (str(_favicon_path) if _favicon_path.exists() else "🧪")
+        else (str(_favicon_path) if _favicon_path.exists() else None)
     ),
 )
 
@@ -83,37 +125,53 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Hide Streamlit chrome and apply subtle theming
-st.markdown(
-    """
-    <style>
-    [data-testid="stToolbar"], [data-testid="stStatusWidget"], #MainMenu, header, footer {visibility: hidden !important;}
-    .block-container {padding-top: 1rem;}
-    .st-emotion-cache-13ln4jf, .st-emotion-cache-1gulkj5 {padding-top: 0 !important;}
-    .stMarkdown p, label, .stTextInput>div>div>input {font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji';}
-    .small-muted {color:#6c757d;font-size:0.85rem;}
-    .app-title {display:flex; flex-direction:column; gap:2px;}
-    .app-title-main {font-size:1.9rem; font-weight:700; letter-spacing:0.2px; margin-bottom:0;}
-    .app-title-sub {color:#6c757d; font-size:0.95rem;}
-    .block-container > div:first-child {background:#f9fbfc; border:1px solid #e6edf3; border-radius:10px; padding:12px 16px;}
-    .top-right-logo {
-        position: absolute;
-        top: 16px;
-        right: 20px;
-        width: 96px;     /* logo size — adjust as needed */
-        max-width: 20vw; /* prevent overflow on very small screens */
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+inject_theme_css(THEMES[st.session_state.get("theme", "Light")])
 
- # --- Sidebar: session controls, loading, and configuration ---
+# --- Top stepper (5 stages) ---
+# Infer stage if user already performed actions (guards against refresh)
+if not s.get("session_dir"):
+    s.stage = 1
+elif s.get("traces") is None:
+    s.stage = max(s.stage, 2)
+elif not s.get("params_confirmed"):
+    s.stage = max(s.stage, 3)
+elif not s.get("export_done"):
+    s.stage = max(s.stage, 4)
+else:
+    s.stage = 5
+
+labels_steps = ["Start new session", "Upload & indexing", "Labeling parameters", "Label files", "Finish & export"]
+current_step = int(s.stage)
+render_stepper_and_tips(current_step)
+
+# Navigation controls
+req_ready = {
+    1: bool(s.get("session_dir")),
+    2: bool(s.get("traces") is not None),
+    3: bool(s.get("params_confirmed")),
+    4: True,
+    5: False,
+}
+nav_left, nav_right = st.columns([1,1])
+if nav_left.button("Back", disabled=(current_step <= 1)):
+    s.stage = max(1, current_step - 1)
+    st.rerun()
+if nav_right.button("Next", disabled=not req_ready.get(current_step, False)):
+    s.stage = min(5, current_step + 1)
+    st.rerun()
+
+# --- Sidebar: session controls, loading, and configuration ---
 with st.sidebar:
-    st.header("Session")
+    st.header("Step 1 — Start new session")
+    st.caption("Set annotator, default save folder. Click Start / Update Session to create a session folder.")
+    start_session = st.button("Start / Update Session")
+    if start_session:
+        s.annotator = annotator.strip() or "anon"
+        s.save_dir = save_dir.strip() or str(Path.home() / "OPCAL_LABELS")
+    s = st.session_state
+    st.session_state["theme"] = "Light"
     annotator = st.text_input("Annotator ID", value=st.session_state.get("annotator", ""))
     save_dir = st.text_input("Save directory", value=st.session_state.get("save_dir", str(Path.home() / "OPCAL_LABELS")))
-    start_session = st.button("Start / Update Session")
     # Resume last session (auto-detect the newest labels.csv under save_dir)
     if st.button("Resume last session"):
         base = Path(save_dir.strip() or str(Path.home() / "OPCAL_LABELS"))
@@ -202,7 +260,6 @@ with st.sidebar:
     st.markdown('---')
     st.header("Cell IDs")
     # Persist config in session
-    s = st.session_state
     s.setdefault("cell_ids_mode", "file")
     s.setdefault("cell_id_prefix", "cell_")
     s.setdefault("cell_id_pad", 5)
@@ -238,6 +295,11 @@ with st.sidebar:
     window_s = st.slider("Rolling median window (s)", 5, 60, 20)
     k = st.slider("SD threshold k", 1.0, 6.0, 3.0, step=0.5)
     stim_time_s = st.number_input("Stimulus time (s)", min_value=0.0, value=5.0, help="Time when stimulation starts; used for dual-SD shading")
+    st.markdown('---')
+    if st.button("Confirm labeling parameters"):
+        s.params_confirmed = True
+        s.stage = max(s.stage, 4)
+        st.success("Parameters confirmed for this session.")
 
     # --- About & Help expander ---
     with st.expander("About & Help"):
@@ -250,8 +312,20 @@ with st.sidebar:
         st.markdown(f"<span class='small-muted'>Version {APP_VERSION}. For citation, include the tool name and version.</span>", unsafe_allow_html=True)
 
 
+#
 # --- Data loading (CSV / NPZ) ---
-uploaded = st.file_uploader("Upload traces CSV (rows=time, cols=cells) or NPZ", type=["csv", "npz"])
+st.subheader("Step 2 — Upload & indexing")
+st.caption("Supported formats: CSV (rows=time, columns=cells) and NPZ (keys: traces, optional: cell_ids, recording_id).")
+uploaded = st.file_uploader(
+    "Upload data file (CSV / NPZ)",
+    type=["csv", "npz"],
+    accept_multiple_files=False,
+    help="CSV: rows=time, columns=cells. NPZ: required key 'traces' (T×N), optional 'cell_ids', 'recording_id'. You can also drag & drop a file here."
+)
+if not uploaded:
+    st.info("Drag & drop a CSV/NPZ file here. After upload, set options in the left sidebar and press **Start / Update Session**.")
+else:
+    st.caption(f"Selected file: **{uploaded.name}**")
 
 s = st.session_state
 s.setdefault("labels", [])
@@ -298,6 +372,8 @@ if uploaded:
             s.cell_ids = [f"{prefix}{i+start:0{pad}d}" for i in range(Ncols)]
         if "recording_id" in npz:
             s.recording_id = str(npz["recording_id"]) 
+    s.current_cell = 0
+    s.stage = max(s.stage, 3)
     # Warn on duplicate IDs
     if len(set(s.cell_ids)) != len(s.cell_ids):
         st.warning("Duplicate cell IDs detected. Consider switching to Auto-generate or adjusting prefix/padding/start.")
@@ -322,6 +398,8 @@ if start_session and s.traces is not None:
         },
     )
     Ncols = s.traces.shape[1]
+    s.current_cell = 0  # reset navigation at session start
+    s.stage = max(s.stage, 3)
     imported_map = False
     # Try to reuse a previous cell_map for this recording_id
     try:
@@ -381,8 +459,32 @@ if start_session and s.traces is not None:
     except Exception:
         pass
 
+# If user started a session before uploading data, create a session folder shell (no traces yet)
+if start_session and s.traces is None:
+    s.annotator = annotator.strip() or s.get("annotator", "anon")
+    s.save_dir = save_dir.strip() or s.get("save_dir", str(Path.home() / "OPCAL_LABELS"))
+    base_dir = Path(s.save_dir)
+    rec_id = s.get("recording_id", f"rec_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+    s.session_dir = make_session_dir(base_dir, rec_id, s.annotator)
+    write_session_header(
+        s.session_dir,
+        {
+            "session_id": Path(s.session_dir).name,
+            "recording_id": rec_id,
+            "annotator_id": s.annotator,
+            "fs_hz": 0.0,
+            "started_utc": now_utc_iso(),
+            "app_version": APP_VERSION,
+            "source_path": "",
+            "source_sha256": "",
+        },
+    )
+    st.success(f"Session folder: {s.session_dir}")
+    _log(f"session_start annotator={s.annotator} recording_id={rec_id}")
+    s.stage = max(s.stage, 2)
+
 # --- Main workspace: navigation, visualization, labeling ---
-if s.traces is not None:
+if s.stage >= 4 and s.traces is not None and s.get("session_dir"):
     T, N = s.traces.shape
     left, mid, right = st.columns([1,2,1], gap="large")
     with left:
@@ -407,7 +509,7 @@ if s.traces is not None:
         for ci in s.label_map.keys():
             if 0 <= int(ci) < N:
                 status[int(ci)] = 1
-        fig_status = go.Figure(go.Bar(x=list(range(N)), y=status, marker_color=["#d3d3d3" if v==0 else "#2ca02c" for v in status]))
+        fig_status = go.Figure(go.Bar(x=list(range(N)), y=status, marker_color=[THEMES[st.session_state.get("theme","Light")]["status_unlabeled"] if v==0 else THEMES[st.session_state.get("theme","Light")]["status_labeled"] for v in status]))
         fig_status.update_yaxes(visible=False)
         fig_status.update_xaxes(title_text="Cells", tickmode="auto", nticks=10)
         fig_status.update_layout(height=120, margin=dict(l=10,r=10,t=10,b=10))
@@ -448,6 +550,7 @@ if s.traces is not None:
         import plotly.graph_objects as go
         t = np.arange(x.size)/fs_hz
         fig = go.Figure()
+        plot_tpl = THEMES[st.session_state.get("theme","Light")]["plotly_tpl"]
         fig.add_trace(go.Scatter(x=t, y=x, name="raw", line=dict(width=1)))
         if smooth:
             fig.add_trace(go.Scatter(x=t, y=x_s, name="smoothed", line=dict(width=2)))
@@ -456,14 +559,14 @@ if s.traces is not None:
         if stim_idx > 1:
             fig.add_shape(type="rect",
                           x0=t[0], x1=t[stim_idx-1], y0=base[:stim_idx].min(), y1=(thr_pre).max(),
-                          fillcolor="rgba(0,200,0,0.15)", line=dict(width=0), layer="below")
+                          fillcolor=THEMES[st.session_state.get("theme","Light")]["shade_pre"], line=dict(width=0), layer="below")
         fig.add_shape(type="rect",
                       x0=t[stim_idx], x1=t[-1], y0=base[stim_idx:].min(), y1=(thr_post).max(),
-                      fillcolor="rgba(200,0,0,0.15)", line=dict(width=0), layer="below")
+                      fillcolor=THEMES[st.session_state.get("theme","Light")]["shade_post"], line=dict(width=0), layer="below")
         fig.add_trace(go.Scatter(x=t[:stim_idx], y=thr_pre, name=f"thr pre ({k}·SD)", line=dict(width=1)))
         fig.add_trace(go.Scatter(x=t[stim_idx:], y=thr_post, name=f"thr post ({k}·SD)", line=dict(width=1)))
         fig.add_trace(go.Scatter(x=t[peaks], y=x_s[peaks], mode="markers", name="peaks"))
-        fig.update_layout(height=520, hovermode="x unified")
+        fig.update_layout(height=520, hovermode="x unified", template=plot_tpl, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig, use_container_width=True)
 
     with right:
@@ -536,8 +639,37 @@ if s.traces is not None:
                     st.rerun()
             else:
                 st.warning("Start a session (Annotator & Save dir) to save CSVs.")
+
+    st.markdown('---')
+    st.subheader("Step 5 — Finish & export")
+    export_col1, export_col2 = st.columns([1,2])
+    with export_col1:
+        do_export = st.button("Export session as ZIP")
+    with export_col2:
+        st.caption("Creates a ZIP archive of the current session folder (labels.csv, peaks.csv, session.csv, cell_map.csv).")
+
+    if do_export and s.get("session_dir"):
+        try:
+            import shutil
+            sess_path = Path(s.session_dir)
+            zip_base = sess_path.parent / f"{sess_path.name}"
+            zip_path = shutil.make_archive(str(zip_base), "zip", root_dir=sess_path)
+            s.export_done = True
+            s.stage = 5
+            st.success(f"Exported: {zip_path}")
+        except Exception as e:
+            st.error(f"Export failed: {e}")
 else:
-    st.info("Upload traces to begin.")
+    if s.stage == 1:
+        st.info("Step 1 — Start a new session in the left sidebar.")
+    elif s.stage == 2:
+        st.info("Step 2 — Upload a CSV/NPZ file and choose indexing in the sidebar.")
+    elif s.stage == 3:
+        st.info("Step 3 — Adjust labeling parameters in the left sidebar and click “Confirm labeling parameters”.")
+    elif s.stage == 5:
+        st.success("Step 5 — Session finished. You can export a ZIP archive or start a new session.")
+    else:
+        st.info("Follow the steps above to begin.")
 
 # --- Footer & legal note ---
 st.markdown("---")

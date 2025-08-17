@@ -45,7 +45,8 @@ coverage.xml
 .ruff_cache/
 
 # Streamlit
-.streamlit/
+.streamlit/*
+!.streamlit/config.toml
 # If you prefer to keep config and ignore only cache/secrets, comment the line above and use:
 # .streamlit/cache/
 # .streamlit/secrets.toml
