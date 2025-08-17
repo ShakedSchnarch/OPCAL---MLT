@@ -64,3 +64,8 @@ config.yaml
 # Local helper/backup files
 backup.patch
 *.bak
+
+# session artifacts
+OPCAL_LABELS*/
+Labeled signals*/
+*.zip

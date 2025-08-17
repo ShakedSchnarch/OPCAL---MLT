@@ -1,10 +1,14 @@
 """
-OPCAL‑Labeler — a local Streamlit app for manual labeling of calcium imaging traces.
-Features:
-  • Dual-SD threshold visualization (pre/post stimulus)
-  • Per-cell labeling with progress tracking and session resume
-  • CSV-based session outputs (session.csv, labels.csv, peaks.csv, cell_map.csv)
-This file focuses on UI orchestration; signal processing lives in `core/`.
+OPCAL‑Labeler — Streamlit app for manual labeling of calcium‑imaging traces.
+
+This module orchestrates the UI flow and navigation between four screens:
+  1) Start session (new / resume / load by path)
+  2) Upload & indexing
+  3) Labeling workspace
+  4) Finish & export
+
+Signal processing and data utilities live under `opcal_mlt.core` and `opcal_mlt.app.session_io`.
+Outputs are CSV‑based (session.csv, labels.csv, peaks.csv, cell_map.csv).
 """
 import streamlit as st
 import numpy as np
@@ -39,9 +43,9 @@ s.setdefault("cell_ids", None)
 s.setdefault("session_dir", "")
 
 
-# --- App metadata & constants ---
+# === App metadata & constants ===
 APP_NAME = "OPCAL‑Labeler"
-APP_VERSION = "0.3.1"
+APP_VERSION = "0.4.0"
 LABELS = [
     "High-flat",
     "High-oscillatory",
@@ -51,7 +55,7 @@ LABELS = [
     "Drifting",
 ]
 
-# ---- Theming (light/dark) ----
+# === Theming (light / dark) ===
 THEMES = {
     "Light": {
         "bg": "#f7f9fb",
@@ -88,7 +92,7 @@ THEMES = {
 }
 
 def _log(msg: str):
-    """Append a timestamped message to the current session's log file (if a session is active)."""
+    """Append a UTC‑timestamped message to the active session's log file (if any)."""
     try:
         s = st.session_state
         if s.get("session_dir"):
@@ -125,7 +129,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# Professional header and theming
+# Header + theme injection
 
 st.markdown(
     f"""
@@ -139,8 +143,8 @@ st.markdown(
 
 inject_theme_css(THEMES[st.session_state.get("theme", "Light")])
 
-# --- Top stepper (4 stages) ---
-# We avoid auto-advancing; Next/Back control navigation. Only guard against entering Labeling without data.
+# === Top stepper (4 stages) ===
+# Do not auto‑advance between screens; only guard illegal entry to Step 3.
 cur = int(s.get("stage", 1))
 if cur == 3 and (s.get("traces") is None or s.get("cell_ids") is None):
     # If user jumped to labeling without data, send back to Upload
@@ -152,9 +156,10 @@ current_step = int(s.stage)
 render_stepper_and_tips(current_step)
 
 
-# --- Create session folder once traces & user meta exist (no sidebar flow) ---
+# === Create session folder (once traces + metadata exist) ===
 if s.get("annotator") and s.get("save_dir") and (s.get("traces") is not None) and not s.get("session_dir"):
     base_dir = Path(s.save_dir)
+    # Recording ID: prefer provided value; fall back to a time‑based identifier.
     rec_id = s.get("recording_id") or f"rec_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     s.session_dir = make_session_dir(base_dir, rec_id, s.annotator)
     write_session_header(
@@ -176,7 +181,7 @@ if s.get("annotator") and s.get("save_dir") and (s.get("traces") is not None) an
         )
     _log(f"session_start annotator={s.annotator} recording_id={rec_id}")
 
-# --- Stage router: show only the current stage screen ---
+# === Stage router (render a single screen) ===
 if s.stage == 1:
     render_start_session(s=s)
 elif s.stage == 2:
@@ -190,14 +195,30 @@ else:
     st.info("Follow the steps above to begin.")
 
 
-# --- Bottom navigation ---
+# === Bottom navigation (Back / Next) ===
 st.markdown("---")
 req_ready = {
     1: bool(s.get("annotator") and s.get("save_dir")),
     2: bool(s.get("traces") is not None and s.get("cell_ids") is not None),
-    3: True,   # allow proceeding to Finish & export
+    3: None,   # will set below
     4: False,
 }
+
+# Guard for Step 3 → 4: require at least one saved label (memory or labels.csv)
+has_any_labels = bool(st.session_state.get("label_map"))
+if not has_any_labels and s.get("session_dir"):
+    # Try disk labels.csv
+    labels_csv_path = Path(s.session_dir) / "labels.csv"
+    if labels_csv_path.exists():
+        try:
+            import pandas as _pd
+            df_lab = _pd.read_csv(labels_csv_path)
+            if len(df_lab) > 0:
+                has_any_labels = True
+        except Exception:
+            pass
+req_ready[3] = has_any_labels
+import streamlit as _st
 c_back, c_sp, c_next = st.columns([1,8,1])
 back_disabled = (int(s.stage) <= 1)
 next_disabled = not req_ready.get(int(s.stage), False)
@@ -206,9 +227,27 @@ with c_back:
         s.stage = max(1, int(s.stage) - 1)
         st.rerun()
 with c_next:
-    if st.button("Next", key="nav_next", use_container_width=True, disabled=next_disabled):
-        s.stage = min(4, int(s.stage) + 1)
-        st.rerun()
+    if int(s.stage) == 4:
+        # At finish: Next starts a new session (reset state except annotator/save_dir)
+        if st.button("Start a new session", key="nav_restart", use_container_width=True):
+            # Keep annotator, save_dir; reset session-specific keys
+            keep_keys = {"annotator", "save_dir"}
+            for k in [
+                "session_dir", "traces", "cell_ids", "recording_id", "label_map",
+                "current_cell", "export_done", "params_confirmed", "_celebrated_finish"
+            ]:
+                if k in s:
+                    del s[k]
+            s.stage = 1
+            st.rerun()
+    else:
+        if st.button("Next", key="nav_next", use_container_width=True, disabled=next_disabled):
+            s.stage = min(4, int(s.stage) + 1)
+            st.rerun()
 
-# --- Footer & legal note ---
-st.markdown("<div class='small-muted'>OPCAL‑Labeler • Local labeling tool • MIT/BSD‑style license. No telemetry. Data stays local.</div>", unsafe_allow_html=True)
+# Hint (Step 3): explain why Next is disabled when no labels are saved
+if int(s.stage) == 3 and not has_any_labels:
+    st.caption("Save at least one label to proceed to Finish & export.")
+
+# === Footer ===
+st.markdown(f"<div class='small-muted'>OPCAL‑Labeler v{APP_VERSION} • Local labeling tool • MIT/BSD‑style license. No telemetry. Data stays local.</div>", unsafe_allow_html=True)

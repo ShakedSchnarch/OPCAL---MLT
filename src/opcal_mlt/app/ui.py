@@ -22,18 +22,34 @@ def inject_theme_css(palette: dict) -> None:
           border-right: 1px solid var(--border);
         }}
         [data-testid="stStatusWidget"], #MainMenu, footer {{visibility: hidden !important;}}
-        .block-container {{padding-top: 1.25rem;}}
+        .block-container {{padding-top: 3.2rem;}}
         h1, h2, h3 {{overflow: visible !important;}}
-        .stMarkdown p, label, .stTextInput>div>div>input {{font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji';}}
-        .small-muted {{color: var(--muted); font-size:0.85rem;}}
-        .app-title {{display:flex; flex-direction:column; gap:2px;}}
-        .app-title-main {{font-size:1.9rem; font-weight:700; letter-spacing:0.2px; margin-bottom:0; color: var(--text);}}
-        .app-title-sub {{color: var(--muted); font-size:0.95rem;}}
-        .block-container > div:first-child {{background: var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px 16px;}}
+        .stMarkdown p, label, .stTextInput>div>div>input {{
+          font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji';
+        }}
+
+        /* App title */
+        .app-title {{display:flex; align-items:center; justify-content:center; flex-direction:column; gap:4px; margin-bottom:.5rem;}}
+        .app-title-main {{font-size: 2.35rem; font-weight: 800; letter-spacing:0.2px; margin:0; color: var(--text); text-align:center;}}
+        .app-title-sub {{color: var(--muted); font-size: 1.05rem; text-align:center;}}
+
+        /* Panels */
+        .block-container > div:first-child {{background: var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px 18px;}}
         .top-right-logo {{position: absolute; top: 16px; right: 20px; width: 96px; max-width: 20vw;}}
         .hint {{margin: 0.25rem 0 0.75rem 0; color: var(--muted); font-size: 0.95rem;}}
+
+        /* Stepper */
+        .stepper {{display:flex;gap:12px;margin:10px 0 12px 0;flex-wrap:wrap; justify-content:center;}}
+        .step {{display:flex;align-items:center;gap:8px;color:var(--muted);}}
+        .step .num {{width:24px;height:24px;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.95rem;}}
+        .step.active {{color:var(--text);}}
+        .step.active .num {{background:var(--accent); border-color:var(--accent); color:#fff;}}
+        .step.done .num {{background:var(--border); color:var(--text);}}
+
+        /* Section headings */
+        .stHeading h2 {{font-size:1.35rem;}}
+        .stHeading h3 {{font-size:1.1rem;}}
         .disabled-pane {{opacity: .45; pointer-events: none; filter: grayscale(20%);}}
-        .stepper {{overflow: visible;}}
         </style>
         """,
         unsafe_allow_html=True,

@@ -1,36 +1,39 @@
-# OPCAL Manual Labeling Tool (MLT)
+# OPCAL Manual Labeling Tool (MLT) — v0.4.0
 
-**OPCAL-Labeler** is a professional, cross-platform manual labeling tool designed for calcium imaging traces in neuroscience research. It enables accurate and efficient annotation of calcium signals, supporting advanced data analysis workflows.
-
-The tool supports **six labeling classes**:  
-`High-flat`, `High-oscillatory`, `Oscillatory`, `Low-activity`, `Uncertain`, and `Drifting` — with the ability to add per-cell notes for detailed annotation.
+**OPCAL-Labeler** is a professional, cross-platform manual labeling tool designed for calcium imaging traces in neuroscience research. It’s a local Streamlit app focused on accurate, efficient annotation of calcium signals to support downstream analysis.
 
 ---
 
 ## 📦 Quick Start
 
-```
+```bash
 # Requires Python 3.12+
 pip install -e .
+
+# Launch (CLI)
 opcal-mlt
-# or (explicit)
-python -m streamlit run src/opcal_mlt/app/main.py
+
+# Or explicitly via Streamlit
+python -m streamlit run src/opcal_mlt/app/main.py --server.port=8501
+
+# Optional: better auto-reload on macOS
+xcode-select --install
+pip install watchdog
 ```
 
 ---
 
-## ✨ Features (v0.3.0)
+## ✨ Features (v0.4.0)
+- **Stepper-only navigation** with clear Step 1 actions (New / Resume / Load by path)
+- **Light theme** polish; consistent headings and layout
+- **Summary-first** finish screen with **pie chart** label distribution + labeled-cells table
+- **Robust resume & summary**: hydrates `labels.csv` / `cell_map.csv` from disk when needed
+- Safe Streamlit state handling (no post-widget mutation; fewer warnings)
 - Load traces (`CSV`, `NPZ`, `HDF5`) and metadata
-- Baseline & robust SD (MAD) calculation
-- Threshold visualization (default: 3 SD)
+- Baseline & robust SD (MAD) calculation; dual-SD threshold visualization (green pre-stimulus / red post)
 - Peak detection via `scipy.signal.find_peaks`
-- One-click/shortcut labeling per cell, with per-cell notes persistence
-- Session resume capability without data loss
-- Progress bar indicating labeling completion
-- Export labels and session data in CSV format
-- Logo and favicon customization
-- Dual STD shading (green pre-stimulus, red post-stimulus)
-- Full provenance stored with each label
+- One-click / shortcut labeling per cell with per-cell notes
+- Progress bar and per-session provenance; export of `session.csv`, `labels.csv`, `peaks.csv`, `cell_map.csv`
 
 For detailed usage, see [`USER_GUIDE.md`](USER_GUIDE.md).  
 For data formats and API details, see [`API.md`](API.md).
@@ -43,13 +46,15 @@ src/
 └── opcal_mlt/
     ├── app/                  # Streamlit app (UI + launcher + session I/O)
     │   ├── main.py
+    │   ├── screens.py
+    │   ├── ui.py
+    │   ├── session_io.py
     │   ├── launch.py
-    │   └── session_io.py
     │   └── assets/
     │       └── logo.png
-    └── core/                 # Core processing logic (algorithms, schemas, I/O)
+    └── core/                 # Core processing & data helpers
         ├── __init__.py
-        ├── features.py
+        ├── features.py       # feature extraction + summaries
         ├── io.py
         ├── peaks.py
         ├── preprocess.py
@@ -59,6 +64,7 @@ tests/
 examples/
 README.md
 USER_GUIDE.md
+API.md
 ```
 
 ---
@@ -76,6 +82,14 @@ Each session creates:
 
 ---
 
+## 🆕 What’s New in 0.4.0
+- Summary-first finish screen with **pie chart** of label distribution
+- Clear Step 1 actions and improved Light theme
+- Disk hydration for resume/summary (`labels.csv`, `cell_map.csv`)
+- Safer Streamlit state usage (no post-widget mutation)
+
+---
+
 ## ⚙️ Requirements
 - **Python**: 3.12+  
 - **OS**: Windows, macOS, or Linux  
@@ -88,6 +102,16 @@ We welcome contributions!
 1. Fork the repository  
 2. Create a new branch (`feature/your-feature`)  
 3. Submit a pull request with a clear description
+
+---
+
+## 🚀 Release / Tagging (maintainers)
+```bash
+git add -A
+git commit -m "release: OPCAL-Labeler 0.4.0 — summary-first UI, pie chart stats, safer state"
+git tag -a v0.4.0 -m "OPCAL-Labeler 0.4.0"
+git push && git push --tags
+```
 
 ---
 

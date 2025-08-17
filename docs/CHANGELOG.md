@@ -1,3 +1,14 @@
+## 0.4.0 - 2025-08-17
+- Summary-first finish screen: **pie chart** of label distribution + labeled-cells table shown **before** export
+- Clear Step 1 actions (New / Resume / Load by path); stepper-only navigation (no auto-advance)
+- Robust resume/summary: hydrate from disk (`labels.csv`, `cell_map.csv`) when in-memory state is empty
+- Safer Streamlit state handling (no post-widget mutation); removed checkbox default conflicts
+- Step 4: replaced "Next" with **Start a new labeling session**; export block moved below summary
+- Statistics moved to core helper: `opcal_mlt.core.features.summarize_labels`
+- UI polish: consistent headings, Light theme defaults, improved footer with version
+- Documentation: updated README and USER_GUIDE for v0.4.0
+- Bug fixes: prevent Next → Finish without any saved labels; stabilize media cache warnings
+
 ## 0.3.0
 - Added new labels: `Uncertain` and `Drifting`
 - Implemented session resume capability

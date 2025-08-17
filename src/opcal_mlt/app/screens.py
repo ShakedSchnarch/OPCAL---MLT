@@ -1,3 +1,19 @@
+"""
+Screens for the OPCAL Labeler Streamlit app.
+
+This module implements the UI for the four high-level steps:
+1) Start new session / resume / load by path
+2) Upload & indexing
+3) Labeling workspace (parameters + plotting + labeling)
+4) Finish & export (summary + ZIP export)
+
+Conventions:
+- We use `s` as an alias for `st.session_state` throughout the file.
+- All functions are *pure-UI*; they read/write to `s` and do not return data.
+- State keys that are shared across screens are documented in each function
+  docstring under "Session state keys".
+- Keep user-facing text in English for clarity and consistency.
+"""
 from __future__ import annotations
 from pathlib import Path
 from datetime import datetime, timezone
@@ -11,11 +27,156 @@ from opcal_mlt.core import peaks as pk
 from opcal_mlt.core import features as ft
 from opcal_mlt.app.session_io import append_labels, append_peaks
 
+
 def render_finish_export(session_state) -> None:
-    """Step 4: Export the current session folder as a ZIP."""
+    """
+    Step 4 — Finish & export.
+
+    Shows a summary of labeled cells (pie chart + per‑cell table) and an option
+    to export the current session as a ZIP archive. If `labels.csv` exists on
+    disk, the function hydrates the summary from it and falls back to the
+    in‑memory `s.label_map` otherwise.
+
+    Session state keys (read/write):
+    - s.session_dir: str path to the active session folder (required for export)
+    - s.label_map: Dict[int, {label:str, notes:str}] used when labels.csv missing
+    - s.cell_ids: List[str] for table display (optional)
+    - s.traces: np.ndarray (T×N), used to infer total cell count for context
+    - s._celebrated_finish: bool guard to trigger balloons only once per session
+    - s.export_done: bool set to True after a successful export
+    """
     s = session_state
     st.markdown('---')
-    st.subheader("Step 4 — Finish & export")
+    st.header("Step 4 — Finish & export")
+
+    # Celebrate arrival to the final step once per session
+    if not s.get("_celebrated_finish", False):
+        st.success("Great job! Labeling complete. You can now export this session as a ZIP archive.")
+        try:
+            st.balloons()
+        except Exception:
+            pass
+        s._celebrated_finish = True
+
+    # ---------- Hydrate from disk when possible ----------
+    labels_df_disk = None
+    try:
+        if s.get("session_dir"):
+            import pandas as _pd
+            sess = Path(s.session_dir)
+            labels_csv_path = sess / "labels.csv"
+            if labels_csv_path.exists():
+                try:
+                    labels_df_disk = _pd.read_csv(labels_csv_path)
+                except Exception:
+                    labels_df_disk = None
+            # Fill cell_ids if missing (for nicer tables)
+            if not s.get("cell_ids"):
+                map_csv = sess / "cell_map.csv"
+                if map_csv.exists():
+                    try:
+                        df_map = _pd.read_csv(map_csv).sort_values("cell_index")
+                        s.cell_ids = [str(x) for x in df_map["cell_id"].tolist()]
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    # Diagnostics: help users verify where the app is reading data from.
+    if s.get("session_dir"):
+        import pandas as _pd
+        diag = f"Session dir: `{s.session_dir}`  \n"
+        p = Path(s.session_dir) / "labels.csv"
+        if p.exists():
+            try:
+                _df = _pd.read_csv(p)
+                diag += f"<b>labels.csv</b>: exists, {len(_df)} rows"
+            except Exception:
+                diag += "<b>labels.csv</b>: exists, <span style='color:red;'>could not read</span>"
+        else:
+            diag += "<b>labels.csv</b>: <span style='color:orange;'>not found</span>"
+        st.caption(diag, unsafe_allow_html=True)
+
+    # Summary (first): compute label stats, then visualize as a pie chart.
+    st.markdown("---")
+    st.subheader("Label statistics")
+
+    try:
+        import pandas as _pd
+
+        # Infer total cell count for nicer context (optional)
+        total_cells = None
+        if s.get("traces") is not None:
+            total_cells = int(getattr(s.traces, "shape", [0, 0])[1])
+        elif s.get("session_dir"):
+            sess = Path(s.session_dir)
+            map_csv = sess / "cell_map.csv"
+            if map_csv.exists():
+                try:
+                    df_map = _pd.read_csv(map_csv)
+                    total_cells = int(len(df_map))
+                except Exception:
+                    pass
+            if total_cells is None:
+                lab_csv = sess / "labels.csv"
+                if lab_csv.exists():
+                    try:
+                        _tmp = _pd.read_csv(lab_csv)
+                        if "cell_index" in _tmp.columns and len(_tmp) > 0:
+                            total_cells = int(_tmp["cell_index"].max()) + 1
+                    except Exception:
+                        pass
+
+        # Build summary using helper (prefer disk, fallback to memory)
+        if labels_df_disk is not None and len(labels_df_disk) > 0:
+            disk_map = {
+                int(r.cell_index): {
+                    "label": str(r.label),
+                    "notes": ("" if "notes" not in labels_df_disk.columns or _pd.isna(getattr(r, "notes", None)) else str(getattr(r, "notes", ""))),
+                }
+                for r in labels_df_disk.itertuples(index=False)
+            }
+            if not s.get("label_map"):
+                s.label_map = disk_map
+            labels_df, stats_df = ft.summarize_labels(disk_map, s.get("cell_ids"), total_cells=total_cells)
+        else:
+            labels_df, stats_df = ft.summarize_labels(
+                s.get("label_map", {}),
+                s.get("cell_ids"),
+                total_cells=total_cells,
+            )
+    except Exception:
+        import pandas as _pd
+        labels_df = _pd.DataFrame(columns=["cell_index", "cell_id", "label", "notes"])
+        stats_df  = _pd.DataFrame(columns=["label", "count", "percent"])
+
+    if labels_df is not None and len(labels_df) > 0:
+        st.caption(f"Found {len(labels_df)} labeled cells" + (f" / {total_cells} total" if total_cells else ""))
+
+        # Pie chart instead of table
+        try:
+            import plotly.express as px
+            fig = px.pie(
+                stats_df,
+                names="label",
+                values="count",
+                hole=0.45,
+                title="Class distribution",
+            )
+            fig.update_traces(textposition="inside", textinfo="percent+label")
+            fig.update_layout(margin=dict(l=10, r=10, t=40, b=10))
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception:
+            pass
+
+        # Detailed per-cell table (kept, under the pie)
+        st.dataframe(labels_df, use_container_width=True)
+    else:
+        st.info("No labels saved yet in this session.")
+
+    # ---------- Export (after summary) ----------
+    st.markdown("---")
+    st.subheader("Export")
     export_col1, export_col2 = st.columns([1, 2])
     with export_col1:
         do_export = st.button("Export session as ZIP", key="btn_export_zip")
@@ -33,9 +194,33 @@ def render_finish_export(session_state) -> None:
         except Exception as e:
             st.error(f"Export failed: {e}")
 
+
 def render_labeling_workspace(*, s, theme: dict, logger) -> None:
     """
-    Step 3: Main labeling workspace (navigation, plots, labeling & save).
+    Step 3 — Main labeling workspace.
+
+    Responsibilities:
+    - Expose processing parameters (sidebar) and apply them to the selected cell.
+    - Plot raw/smoothed signals, baseline and dual‑SD thresholds.
+    - Navigate between cells and manage labeling, including undo support.
+
+    Parameters
+    ----------
+    s : streamlit.runtime.state.SafeSessionState
+        The shared session state object (`st.session_state`).
+    theme : dict
+        A small palette used for plot shading/markers.
+    logger : Callable[[str], None]
+        Callback used for lightweight audit logs.
+
+    Session state keys (read/write)
+    -------------------------------
+    - traces: np.ndarray (T×N) of signals (required)
+    - cell_ids: List[str] mapping index→id (required)
+    - current_cell / prev_cell: int navigation helpers
+    - label_map: Dict[int, {label, notes}] accumulated labels
+    - history: List[Tuple[cell_index, previous_label_or_None]] for undo
+    - fs_hz, smooth, window, poly, baseline_method, window_s, k, stim_time_s: parameters
     """
     # Safety: initialize state keys used below
     if "label_map" not in s or not isinstance(s.label_map, dict):
@@ -45,7 +230,7 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
     if s.get("traces") is None or s.get("cell_ids") is None:
         st.warning("No data loaded yet. Go back to Step 2 (Upload & indexing).")
         return
-    # --- Sidebar parameters (visible and editable during labeling) ---
+    # Sidebar: processing/labeling parameters
     with st.sidebar:
         st.markdown("### Labeling parameters")
         s.fs_hz = st.number_input("Sampling rate (Hz)", min_value=0.1, value=float(s.get("fs_hz", 10.0)), step=0.1)
@@ -77,7 +262,7 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
         idx = st.number_input("Cell index", 0, N-1, s.current_cell, step=1)
         s.current_cell = idx
 
-        # When switching cells, sync defaults from saved state
+        # When the user navigates, reflect any existing label in the radio/textarea.
         if s.get("prev_cell") != s.current_cell:
             existing = s.label_map.get(int(s.current_cell))
             st.session_state["label_value"] = existing["label"] if existing else "Oscillatory"
@@ -122,7 +307,7 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
             s.current_cell = min(N-1, s.current_cell + 1)
             st.rerun()
 
-    # -------- Middle: processing & plot --------
+    # Middle: processing & plot
     x = s.traces[:, s.current_cell].astype(float)
     x_s = pp.smooth_signal(x, window=window, polyorder=poly) if smooth else x
     base = pp.baseline_rolling_median(x_s, fs_hz, window_s=window_s) if baseline_method.startswith("rolling") else pp.baseline_percentile(x_s, q=25.0)
@@ -151,7 +336,7 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
         fig.update_layout(margin=dict(l=10, r=10, t=40, b=10))
         st.plotly_chart(fig, use_container_width=True)
 
-    # -------- Right: labeling --------
+    # Right: labeling
     with right:
         st.subheader("Label")
         s.setdefault("history", [])
@@ -225,34 +410,90 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
 from opcal_mlt.app.session_io import make_session_dir, write_session_header, write_cell_map, now_utc_iso
 
 def render_start_session(*, s):
+    """
+    Step 1 — Start new session / resume / load by path.
+
+    Provides three mutually exclusive actions. The function only updates
+    `s.annotator`, `s.save_dir` and/or `s.session_dir` and leaves file creation
+    to later steps. The UI is designed so that users always move forward via the
+    stepper (Back/Next are outside this function).
+
+    Session state keys (read/write):
+    - annotator: str (ID of the person labeling)
+    - save_dir: str (root directory where session folders reside)
+    - session_dir: str (path to a specific session — set by resume/load)
+    - label_map, cell_ids: hydrated on resume/load when CSVs are found
+    """
+
     st.header("Step 1 — Start new session")
-    st.caption("Choose what you want to do and complete the minimal details. You can move to the next step once Annotator + Save directory are set.")
+    st.caption("Pick one action to initialize or restore your working session.")
 
     # Unified chooser for clarity
     choice = st.radio(
         "Action",
-        ("Start / Update settings", "Resume recent session", "Load session from path"),
+        ("New session", "Resume recent session", "Load session from path"),
         horizontal=True,
         key="start_choice",
     )
 
-    # --- Start / Update settings ---
-    if choice == "Start / Update settings":
-        st.subheader("Start / Update settings")
+    # --- New session ---
+    if choice == "New session":
+        st.markdown("### New session")
         st.caption("Set your annotator ID and where sessions are saved. This does not create files yet; they are created when data is uploaded.")
+        default_root = s.get("save_dir", str(Path.home() / "OPCAL_LABELS"))
+
+        # Initialize backing keys before rendering widgets to avoid Streamlit key mutation errors.
+        if "use_default_savedir" not in st.session_state:
+            st.session_state["use_default_savedir"] = True
+        if "start_savedir" not in st.session_state:
+            st.session_state["start_savedir"] = default_root
+
         annotator = st.text_input("Annotator ID", value=s.get("annotator", ""), key="start_annotator")
-        save_dir = st.text_input("Save directory", value=s.get("save_dir", str(Path.home() / "OPCAL_LABELS")), key="start_savedir")
-        if st.button("Save settings", key="btn_save_start_settings"):
-            s.annotator = annotator.strip() or "anon"
-            s.save_dir = save_dir.strip() or str(Path.home() / "OPCAL_LABELS")
-            st.success("Settings saved — you can proceed to Upload when ready.")
-        st.markdown('<div class="hint">Tip: You only need these once per working session. You can change them later.</div>', unsafe_allow_html=True)
+
+        # Default-location toggle (placed above the path input)
+        use_default = st.checkbox(
+            "Use default (~/OPCAL_LABELS)",
+            key="use_default_savedir",
+            help="When checked, the default folder will be used for the session. Uncheck to choose a custom folder path.")
+
+        # default_root assignment already above; remove duplicate
+
+        # Show a *disabled* field when using default, otherwise a normal editable input.
+        if use_default:
+            effective_root = default_root
+            # Use a separate view-only key to avoid mutating the real input key after creation
+            st.text_input(
+                "Save directory",
+                value=default_root,
+                key="start_savedir_view",
+                disabled=True,
+                help="Folder where session subfolders will be created.")
+        else:
+            effective_root = st.text_input(
+                "Save directory",
+                value=st.session_state.get("start_savedir", default_root),
+                key="start_savedir",
+                disabled=False,
+                help="Folder where session subfolders will be created.")
+
+        if st.button("Start", type="primary", key="btn_start_new_session", use_container_width=True):
+            # Determine the effective root without mutating widget keys post-creation
+            chosen_root = default_root if use_default else st.session_state.get("start_savedir", default_root)
+            root = Path(chosen_root).expanduser()
+            try:
+                root.mkdir(parents=True, exist_ok=True)
+                s.annotator = (annotator or "anon").strip()
+                s.save_dir = str(root)
+                st.success("Settings saved — you can proceed to Upload.")
+            except Exception as e:
+                st.error(f"Could not create or use the selected directory: {e}")
 
     # --- Resume recent session ---
     elif choice == "Resume recent session":
-        st.subheader("Resume recent session")
+        st.markdown("### Resume recent session")
         st.caption("We look under your Save directory for the most recent session folders that contain labels.csv.")
         base_root = st.text_input("Save directory", value=s.get("save_dir", str(Path.home() / "OPCAL_LABELS")), key="resume_savedir")
+        # Heuristic: scan <save_dir>/<recording>/<session> and pick those with labels.csv (latest first).
         recent = []
         base = Path(base_root.strip())
         if base.exists():
@@ -270,13 +511,16 @@ def render_start_session(*, s):
         if recent:
             options = [f"{p.parent.name} / {p.name}" for _, p in recent]
             sel = st.selectbox("Pick a session", options, index=0, key="resume_pick")
-            if st.button("Resume", key="btn_resume_pick"):
+            if st.button("Start", type="primary", key="btn_start_resume", use_container_width=True):
                 try:
                     p = recent[options.index(sel)][1]
                     s.session_dir = str(p)
                     # Ensure annotator/save_dir present so Next can enable
-                    s.annotator = s.get("annotator", "anon")
-                    s.save_dir = base_root.strip() or s.get("save_dir", str(Path.home() / "OPCAL_LABELS"))
+                    s.annotator = (s.get("annotator") or "anon")
+                    # Prefer the typed base_root; otherwise keep existing save_dir or fall back to default under HOME
+                    default_root = str(Path.home() / "OPCAL_LABELS")
+                    base_root_clean = base_root.strip()
+                    s.save_dir = base_root_clean or s.get("save_dir") or default_root
                     # Load existing state (labels + optional cell_map)
                     labels_csv = p / "labels.csv"
                     cell_map_csv = p / "cell_map.csv"
@@ -303,15 +547,22 @@ def render_start_session(*, s):
 
     # --- Load session by path ---
     else:
-        st.subheader("Load session from path")
+        st.markdown("### Load session from path")
         st.caption("Paste a full path to an existing session folder (the folder that contains labels.csv).")
         load_path = st.text_input("Existing session folder path", value=s.get("load_session_dir", ""), key="load_path")
-        if st.button("Load session", key="btn_load_session_path"):
+        if st.button("Start", type="primary", key="btn_start_load", use_container_width=True):
             p = Path(load_path.strip())
             if p.exists() and p.is_dir():
                 s.session_dir = str(p)
-                s.annotator = s.get("annotator", "anon")
-                s.save_dir = s.get("save_dir", str(Path.home() / "OPCAL_LABELS"))
+                s.annotator = (s.get("annotator") or "anon")
+                # Try to infer a logical save_dir from the chosen session path:
+                # expected structure: <save_root>/<recording_id>/<session_id>
+                try:
+                    inferred_root = str(p.parent.parent)
+                except Exception:
+                    inferred_root = ""
+                default_root = str(Path.home() / "OPCAL_LABELS")
+                s.save_dir = inferred_root or s.get("save_dir") or default_root
                 labels_csv = p / "labels.csv"
                 cell_map_csv = p / "cell_map.csv"
                 loaded = 0
@@ -334,6 +585,22 @@ def render_start_session(*, s):
         st.markdown('<div class="hint">Tip: This is useful when someone shared a session folder with you.</div>', unsafe_allow_html=True)
 
 def render_upload_and_indexing(*, s):
+    """
+    Step 2 — Upload & indexing.
+
+    Accepts CSV or NPZ input, previews the data and lets the user decide how
+    to assign cell IDs (keep headers / import mapping / auto‑generate). This
+    function does not write to disk—only prepares `s.traces`, `s.cell_ids` and
+    `s.recording_id` for the downstream labeling workspace.
+
+    Session state keys (read/write):
+    - traces: np.ndarray (T×N)
+    - cell_ids: List[str]
+    - recording_id: str
+    - cell_id_prefix, cell_id_pad, cell_id_start: auto‑ID options
+    - current_cell: int (reset to 0 after successful load)
+    """
+
     st.header("Step 2 — Upload & indexing")
     st.caption("Upload a CSV (rows=time, columns=cells) or NPZ (key 'traces', optional 'cell_ids','recording_id'). After upload, choose how to map cell IDs.")
 
@@ -479,6 +746,12 @@ def render_upload_and_indexing(*, s):
         st.success(f"Loaded traces: shape {s.traces.shape}. Mapping ready.")
 
 def render_params(*, s):
+    """
+    (Deprecated) Step 3 — Labeling parameters.
+
+    Kept for internal use or future toggles. The interactive labeling screen now
+    exposes these parameters in the sidebar of the workspace itself.
+    """
     st.header("Step 3 — Labeling parameters")
     s.fs_hz = st.number_input("Sampling rate (Hz)", min_value=0.1, value=float(s.get("fs_hz", 10.0)), step=0.1)
     s.smooth = st.checkbox("Apply Savitzky–Golay smoothing", value=bool(s.get("smooth", True)))
