@@ -1,86 +1,17 @@
-# OPCAL Manual Labeling Tool (MLT)
+# OPCAL — Manual Labeling Tool
 
-![alt text](image.png)
-
-**OPCAL-Labeler** is a professional, cross-platform manual labeling tool designed for calcium imaging traces in neuroscience research. It enables accurate and efficient annotation of calcium signals, supporting advanced data analysis workflows.
-
-The tool supports **six labeling classes**:  
-`High-flat`, `High-oscillatory`, `Oscillatory`, `Low-activity`, `Uncertain`, and `Drifting` — with the ability to add per-cell notes for detailed annotation.
-
----
-
-## 📦 Quick Start
-
-# Requires Python 3.10+
+## Install
+```bash
 pip install -e .
-# run (all OS)
+```
+
+## Run UI
+```bash
 opcal-mlt
-# or (explicit)
-python -m streamlit run src/opcal/app/main.py
-
----
-
-## ✨ Features (v0.3.0)
-- Load traces (`CSV`, `NPZ`, `HDF5`) and metadata
-- Baseline & robust SD (MAD) calculation
-- Threshold visualization (default: 3 SD)
-- Peak detection via `scipy.signal.find_peaks`
-- One-click/shortcut labeling per cell, with per-cell notes persistence
-- Session resume capability without data loss
-- Progress bar indicating labeling completion
-- Export labels and session data in CSV format
-- Logo and favicon customization
-- Dual STD shading (green pre-stimulus, red post-stimulus)
-- Full provenance stored with each label
-
-For detailed usage, see [`USER_GUIDE.md`](USER_GUIDE.md).  
-For data formats and API details, see [`API.md`](API.md).
-
----
-
-## 🗂 File Structure
-```
-.
-├── app/                  # Streamlit app entry point
-├── core/                 # Core processing logic
-├── examples/             # Example datasets
-├── scripts/              # Launcher scripts (.bat, .sh, .command, .ps1)
-├── tests/                # Unit tests
-├── README.md
-└── USER_GUIDE.md
 ```
 
----
-
-## 📤 Session Outputs
-Each session creates:
+## Dev CLI
+```bash
+opcal-mlt-dev info
+opcal-mlt-dev start-session --input examples/traces_example.csv --out session.json
 ```
-<save_dir>/<recording_id>/<YYYYmmdd_HHMMSS>_<annotator>/
-├─ session.csv
-├─ labels.csv
-├─ peaks.csv
-└─ cell_map.csv
-```
-**`labels.csv`** is the main output for downstream analysis, containing timestamps, annotator ID, and consistent cell indices for reproducibility.
-
----
-
-## ⚙️ Requirements
-- **Python**: 3.10+  
-- **OS**: Windows, macOS, or Linux  
-- **Disk Space**: Minimum 200MB free for typical projects  
-
----
-
-## 🤝 Contributing
-We welcome contributions!  
-1. Fork the repository  
-2. Create a new branch (`feature/your-feature`)  
-3. Submit a pull request with a clear description
-
----
-
-## 📜 License
-This project is licensed under the [MIT License](LICENSE).
-
----
