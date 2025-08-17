@@ -2,6 +2,7 @@ from __future__ import annotations
 from pathlib import Path
 from datetime import datetime, timezone
 import numpy as np
+import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 
@@ -29,6 +30,7 @@ def render_finish_export(session_state) -> None:
             zip_path = shutil.make_archive(str(zip_base), "zip", root_dir=sess_path)
             s.export_done = True
             s.stage = 5
+            st.rerun()
             st.success(f"Exported: {zip_path}")
         except Exception as e:
             st.error(f"Export failed: {e}")
@@ -201,3 +203,254 @@ def render_labeling_workspace(*, s, params: dict, theme: dict, logger) -> None:
                     st.rerun()
             else:
                 st.warning("Start a session (Annotator & Save dir) to save CSVs.")
+
+from opcal_mlt.app.session_io import make_session_dir, write_session_header, write_cell_map, now_utc_iso
+
+def render_start_session(*, s):
+    st.header("Step 1 — Start new session")
+    st.caption("Set annotator and default save folder, then click Start / Update Session to create a session folder.")
+    annotator = st.text_input("Annotator ID", value=s.get("annotator", ""))
+    save_dir = st.text_input("Save directory", value=s.get("save_dir", str(Path.home() / "OPCAL_LABELS")))
+    col1, col2 = st.columns([1,1])
+    with col1:
+        start_session = st.button("Start / Update Session", key="btn_stage1_start")
+    with col2:
+        resume = st.button("Resume last session", key="btn_stage1_resume")
+    if start_session:
+        s.annotator = annotator.strip() or "anon"
+        s.save_dir = save_dir.strip() or str(Path.home() / "OPCAL_LABELS")
+        st.success("Settings saved. You can proceed to Upload.")
+        s.stage = max(s.stage, 2)
+        st.rerun()
+    if resume:
+        base = Path(save_dir.strip() or str(Path.home() / "OPCAL_LABELS"))
+        candidates = []
+        if base.exists():
+            for rec_dir in base.iterdir():
+                if rec_dir.is_dir():
+                    for sess in rec_dir.iterdir():
+                        if (sess / "labels.csv").exists():
+                            try:
+                                mtime = (sess / "labels.csv").stat().st_mtime
+                                candidates.append((mtime, sess))
+                            except Exception:
+                                pass
+        if candidates:
+            candidates.sort(reverse=True)
+            p = candidates[0][1]
+            s.session_dir = str(p)
+            labels_csv = p / "labels.csv"
+            cell_map_csv = p / "cell_map.csv"
+            loaded = 0
+            if labels_csv.exists():
+                try:
+                    df_lab = pd.read_csv(labels_csv)
+                    s.label_map = {int(r.cell_index): {"label": str(r.label), "notes": str(r.notes) if not pd.isna(r.notes) else ""} for r in df_lab.itertuples(index=False)}
+                    loaded = len(s.label_map)
+                except Exception as e:
+                    st.error(f"Failed to read labels.csv: {e}")
+            if cell_map_csv.exists() and not s.cell_ids:
+                try:
+                    df_map = pd.read_csv(cell_map_csv)
+                    df_map = df_map.sort_values("cell_index")
+                    s.cell_ids = [str(x) for x in df_map["cell_id"].tolist()]
+                except Exception as e:
+                    st.warning(f"Could not read cell_map.csv: {e}")
+            st.success(f"Resumed last session: {p} ({loaded} labeled cells)")
+            s.stage = max(s.stage, 4)
+            st.rerun()
+        else:
+            st.warning("No previous sessions found under the selected Save directory.")
+    with st.expander("Load existing session (path)"):
+        load_session_dir = st.text_input("Existing session dir", value=s.get("load_session_dir", ""))
+        if st.button("Load session", key="btn_stage1_load"):
+            p = Path(load_session_dir.strip())
+            if p.exists() and p.is_dir():
+                s.session_dir = str(p)
+                labels_csv = p / "labels.csv"
+                cell_map_csv = p / "cell_map.csv"
+                loaded = 0
+                if labels_csv.exists():
+                    try:
+                        df_lab = pd.read_csv(labels_csv)
+                        s.label_map = {int(r.cell_index): {"label": str(r.label), "notes": str(r.notes) if not pd.isna(r.notes) else ""} for r in df_lab.itertuples(index=False)}
+                        loaded = len(s.label_map)
+                    except Exception as e:
+                        st.error(f"Failed to read labels.csv: {e}")
+                if cell_map_csv.exists() and not s.cell_ids:
+                    try:
+                        df_map = pd.read_csv(cell_map_csv)
+                        df_map = df_map.sort_values("cell_index")
+                        s.cell_ids = [str(x) for x in df_map["cell_id"].tolist()]
+                    except Exception as e:
+                        st.warning(f"Could not read cell_map.csv: {e}")
+                st.success(f"Loaded session from {p} ({loaded} labeled cells)")
+                s.stage = max(s.stage, 4)
+                st.rerun()
+            else:
+                st.warning("Enter a valid existing session directory path.")
+
+def render_upload_and_indexing(*, s):
+    st.header("Step 2 — Upload & indexing")
+    st.caption("Upload a CSV (rows=time, columns=cells) or NPZ (key 'traces', optional 'cell_ids','recording_id'). After upload, choose how to map cell IDs.")
+
+    # --- Upload ---
+    uploaded = st.file_uploader(
+        "Upload data file (CSV / NPZ)",
+        type=["csv", "npz"],
+        accept_multiple_files=False,
+        key="uploader_step2",
+        help="CSV: rows=time, columns=cells. NPZ: required key 'traces' (T×N), optional 'cell_ids', 'recording_id'."
+    )
+
+    if not uploaded:
+        st.info("Drag & drop a CSV/NPZ file to begin.")
+        return
+
+    st.success(f"Selected file: **{uploaded.name}**")
+    suffix = Path(uploaded.name).suffix.lower()
+
+    # Reset per-upload state to avoid stale values
+    for k in ["traces","cell_ids","recording_id","cell_map_preview_done"]:
+        s.pop(k, None)
+
+    # --- Parse file & quick preview ---
+    if suffix == ".csv":
+        df = pd.read_csv(uploaded)
+        s.traces = df.values
+        N = s.traces.shape[1]
+        # Prepare a small preview of headers and first rows
+        st.subheader("Preview")
+        st.write(df.head(5))
+        # Heuristic: numeric/clean headers?
+        col_headers = list(df.columns.astype(str))
+        has_useful_headers = all(h.lower() != "unnamed: 0" for h in col_headers)
+        default_recording = Path(uploaded.name).stem
+        s.recording_id = s.get("recording_id", default_recording)
+
+        # --- Choose mapping mode ---
+        st.subheader("Cell ID mapping")
+        mode = st.radio(
+            "Choose how to assign cell IDs",
+            ("Use column headers from CSV", "Import external mapping CSV", "Auto-generate IDs"),
+            index=(0 if has_useful_headers else 2),
+            key="idx_mode_csv",
+            help="You can keep the CSV column names, import a mapping file with columns 'cell_index,cell_id', or generate IDs."
+        )
+
+        if mode == "Use column headers from CSV":
+            s.cell_ids = col_headers
+            st.info("Using column headers as cell IDs.")
+        elif mode == "Import external mapping CSV":
+            map_file = st.file_uploader(
+                "Upload mapping CSV (columns: cell_index, cell_id)", type=["csv"], key="map_csv_uploader"
+            )
+            if map_file is not None:
+                try:
+                    df_map = pd.read_csv(map_file)
+                    if not {"cell_index","cell_id"}.issubset(set(df_map.columns)):
+                        st.error("Mapping CSV must contain columns: 'cell_index' and 'cell_id'.")
+                    else:
+                        df_map = df_map.sort_values("cell_index")
+                        ids = [str(x) for x in df_map["cell_id"].tolist()]
+                        if len(ids) != N:
+                            st.error(f"Mapping length ({len(ids)}) doesn't match number of columns ({N}).")
+                        else:
+                            s.cell_ids = ids
+                            st.success("Applied external mapping.")
+                except Exception as e:
+                    st.error(f"Failed to read mapping CSV: {e}")
+        else:  # Auto-generate
+            colA, colB, colC = st.columns(3)
+            prefix = colA.text_input("Auto ID prefix", value=str(s.get("cell_id_prefix","cell_")), key="auto_prefix")
+            pad    = colB.number_input("Zero pad", 1, 8, int(s.get("cell_id_pad",5)), step=1, key="auto_pad")
+            start  = colC.number_input("Start index", 0, 1_000_000, int(s.get("cell_id_start",0)), step=1, key="auto_start")
+            s.cell_id_prefix, s.cell_id_pad, s.cell_id_start = prefix, pad, start
+            s.cell_ids = [f"{prefix}{i+start:0{pad}d}" for i in range(N)]
+            st.info("Auto-generated IDs applied.")
+
+    else:  # NPZ
+        npz = np.load(uploaded, allow_pickle=True)
+        s.traces = npz["traces"]
+        N = s.traces.shape[1]
+        st.subheader("Preview")
+        st.write({"npz_keys": list(npz.files)})
+        s.recording_id = str(npz["recording_id"]) if "recording_id" in npz else s.get("recording_id", Path(uploaded.name).stem)
+
+        # Present options depending on whether cell_ids exists in NPZ
+        has_ids = "cell_ids" in npz
+        mode_options = ["Use IDs from NPZ" if has_ids else "Auto-generate IDs", "Import external mapping CSV", "Auto-generate IDs"]
+        if not has_ids:
+            mode_options = ["Auto-generate IDs", "Import external mapping CSV"]
+        mode = st.radio(
+            "Choose how to assign cell IDs",
+            tuple(mode_options),
+            index=0,
+            key="idx_mode_npz",
+        )
+
+        if mode == "Use IDs from NPZ" and has_ids:
+            try:
+                arr = npz["cell_ids"]
+                s.cell_ids = [str(x) for x in (arr.tolist() if hasattr(arr, "tolist") else list(arr))]
+                if len(s.cell_ids) != N:
+                    st.warning("Length of 'cell_ids' doesn't match 'traces' columns; switching to auto‑generate.")
+                    mode = "Auto-generate IDs"
+            except Exception as e:
+                st.warning(f"Failed to read NPZ cell_ids ({e}); switching to auto‑generate.")
+                mode = "Auto-generate IDs"
+
+        if mode == "Import external mapping CSV":
+            map_file = st.file_uploader(
+                "Upload mapping CSV (columns: cell_index, cell_id)", type=["csv"], key="map_npz_uploader"
+            )
+            if map_file is not None:
+                try:
+                    df_map = pd.read_csv(map_file)
+                    if not {"cell_index","cell_id"}.issubset(set(df_map.columns)):
+                        st.error("Mapping CSV must contain columns: 'cell_index' and 'cell_id'.")
+                    else:
+                        df_map = df_map.sort_values("cell_index")
+                        ids = [str(x) for x in df_map["cell_id"].tolist()]
+                        if len(ids) != N:
+                            st.error(f"Mapping length ({len(ids)}) doesn't match number of columns ({N}).")
+                        else:
+                            s.cell_ids = ids
+                            st.success("Applied external mapping.")
+                except Exception as e:
+                    st.error(f"Failed to read mapping CSV: {e}")
+
+        if (mode == "Auto-generate IDs") or ("cell_ids" not in s):
+            prefix = st.text_input("Auto ID prefix", value=str(s.get("cell_id_prefix","cell_")), key="auto_prefix_npz")
+            pad    = st.number_input("Zero pad", 1, 8, int(s.get("cell_id_pad",5)), step=1, key="auto_pad_npz")
+            start  = st.number_input("Start index", 0, 1_000_000, int(s.get("cell_id_start",0)), step=1, key="auto_start_npz")
+            s.cell_id_prefix, s.cell_id_pad, s.cell_id_start = prefix, pad, start
+            s.cell_ids = [f"{prefix}{i+start:0{pad}d}" for i in range(N)]
+            st.info("Auto-generated IDs applied.")
+
+    # --- Finalize upload ---
+    if s.get("traces") is not None and s.get("cell_ids") is not None:
+        if len(set(s.cell_ids)) != len(s.cell_ids):
+            st.warning("Duplicate cell IDs detected. Consider a different mapping.")
+        s.current_cell = 0
+        st.success(f"Loaded traces: shape {s.traces.shape}. Mapping ready.")
+        st.session_state.stage = max(st.session_state.stage, 3)
+        if st.button("Proceed to parameters", key="btn_to_params"):
+            st.session_state.stage = 3
+            st.rerun()
+
+def render_params(*, s):
+    st.header("Step 3 — Labeling parameters")
+    s.fs_hz = st.number_input("Sampling rate (Hz)", min_value=0.1, value=float(s.get("fs_hz", 10.0)), step=0.1)
+    s.smooth = st.checkbox("Apply Savitzky–Golay smoothing", value=bool(s.get("smooth", True)))
+    s.window = st.slider("Smooth window", 5, 101, int(s.get("window", 31)), step=2)
+    s.poly = st.slider("Smooth polyorder", 1, 5, int(s.get("poly", 3)))
+    s.baseline_method = st.selectbox("Baseline method", ["rolling_median", "percentile (25)"], index=0 if str(s.get("baseline_method","rolling_median")).startswith("rolling") else 1)
+    s.window_s = st.slider("Rolling median window (s)", 5, 60, int(s.get("window_s", 20)))
+    s.k = st.slider("SD threshold k", 1.0, 6.0, float(s.get("k", 3.0)), step=0.5)
+    s.stim_time_s = st.number_input("Stimulus time (s)", min_value=0.0, value=float(s.get("stim_time_s", 5.0)), help="Time when stimulation starts; used for dual-SD shading")
+    if st.button("Confirm labeling parameters", key="btn_stage3_confirm"):
+        s.params_confirmed = True
+        st.success("Parameters confirmed. Proceed to labeling.")
+        s.stage = max(s.stage, 4)
+        st.rerun()

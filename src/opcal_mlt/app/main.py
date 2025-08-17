@@ -12,7 +12,7 @@ import pandas as pd
 from pathlib import Path
 from datetime import datetime, timezone
 from opcal_mlt.app.ui import inject_theme_css, render_stepper_and_tips
-from opcal_mlt.app.screens import render_labeling_workspace, render_finish_export
+from opcal_mlt.app.screens import render_labeling_workspace, render_finish_export, render_start_session, render_upload_and_indexing, render_params
 try:
     # New name (preferred)
     from opcal_mlt.core.schemas import PreprocessConfig
@@ -23,6 +23,7 @@ s = st.session_state
 s.setdefault("stage", 1)               # 1=Start, 2=Upload, 3=Params, 4=Label, 5=Finish
 s.setdefault("params_confirmed", False)
 s.setdefault("export_done", False)
+s.setdefault("recording_id", "")
 
 
 # --- App metadata & constants ---
@@ -108,6 +109,7 @@ st.set_page_config(
         if _page_icon_obj is not None
         else (str(_favicon_path) if _favicon_path.exists() else None)
     ),
+    initial_sidebar_state="collapsed",
 )
 
 # Professional header and theming
@@ -125,15 +127,20 @@ st.markdown(
 inject_theme_css(THEMES[st.session_state.get("theme", "Light")])
 
 # --- Top stepper (5 stages) ---
-# Infer stage if user already performed actions (guards against refresh)
-if not s.get("session_dir"):
+# Infer stage conservatively based on existing flags, but never downgrade the user's explicit navigation.
+# We only advance the stage if prerequisites for the *next* stage are already satisfied.
+cur = int(s.get("stage", 1))
+# If we haven't uploaded yet, max is 1 (Start) or 2 (Upload)
+if cur <= 1:
     s.stage = 1
-elif s.get("traces") is None:
-    s.stage = max(s.stage, 2)
-elif not s.get("params_confirmed"):
-    s.stage = max(s.stage, 3)
-elif not s.get("export_done"):
-    s.stage = max(s.stage, 4)
+elif cur == 2 and s.get("traces") is None:
+    s.stage = 2
+elif cur <= 3 and not s.get("params_confirmed"):
+    s.stage = 3
+elif cur <= 4 and not s.get("export_done"):
+    # Reaching stage 4 (labeling) requires a session_dir, but we allow the user to *arrive* at step 4 UI only
+    # after upload + params are confirmed; the session folder will be created automatically once traces exist.
+    s.stage = 4 if (s.get("traces") is not None and s.get("params_confirmed")) else 3
 else:
     s.stage = 5
 
@@ -143,9 +150,9 @@ render_stepper_and_tips(current_step)
 
 # Navigation controls
 req_ready = {
-    1: bool(s.get("session_dir")),
-    2: bool(s.get("traces") is not None),
-    3: bool(s.get("params_confirmed")),
+    1: bool(s.get("annotator") and s.get("save_dir")),  # after Start/Update in step 1
+    2: bool(s.get("traces") is not None),               # after upload in step 2
+    3: bool(s.get("params_confirmed")),                 # after confirm in step 3
     4: True,
     5: False,
 }
@@ -157,311 +164,11 @@ if nav_right.button("Next", key="btn_stage_next", disabled=not req_ready.get(cur
     s.stage = min(5, current_step + 1)
     st.rerun()
 
-# --- Sidebar: session controls, loading, and configuration ---
-with st.sidebar:
-    st.header("Step 1 — Start new session")
-    st.caption("Set annotator, default save folder. Click Start / Update Session to create a session folder.")
-    s = st.session_state
-    st.session_state["theme"] = "Light"
-    annotator = st.text_input("Annotator ID", value=st.session_state.get("annotator", ""))
-    save_dir = st.text_input("Save directory", value=st.session_state.get("save_dir", str(Path.home() / "OPCAL_LABELS")))
-    start_session = st.button("Start / Update Session")
-    if start_session:
-        s.annotator = annotator.strip() or "anon"
-        s.save_dir = save_dir.strip() or str(Path.home() / "OPCAL_LABELS")
-    # Resume last session (auto-detect the newest labels.csv under save_dir)
-    if st.button("Resume last session"):
-        base = Path(save_dir.strip() or str(Path.home() / "OPCAL_LABELS"))
-        candidates = []
-        if base.exists():
-            for rec_dir in base.iterdir():
-                if rec_dir.is_dir():
-                    for sess in rec_dir.iterdir():
-                        if (sess / "labels.csv").exists():
-                            try:
-                                mtime = (sess / "labels.csv").stat().st_mtime
-                                candidates.append((mtime, sess))
-                            except Exception:
-                                pass
-        if candidates:
-            candidates.sort(reverse=True)
-            p = candidates[0][1]
-            s.session_dir = str(p)
-            labels_csv = p / "labels.csv"
-            cell_map_csv = p / "cell_map.csv"
-            loaded = 0
-            if labels_csv.exists():
-                try:
-                    df_lab = pd.read_csv(labels_csv)
-                    s.label_map = {int(r.cell_index): {"label": str(r.label), "notes": str(r.notes) if not pd.isna(r.notes) else ""} for r in df_lab.itertuples(index=False)}
-                    loaded = len(s.label_map)
-                except Exception as e:
-                    st.error(f"Failed to read labels.csv: {e}")
-            if cell_map_csv.exists() and not s.cell_ids:
-                try:
-                    df_map = pd.read_csv(cell_map_csv)
-                    df_map = df_map.sort_values("cell_index")
-                    s.cell_ids = [str(x) for x in df_map["cell_id"].tolist()]
-                except Exception as e:
-                    st.warning(f"Could not read cell_map.csv: {e}")
-            st.success(f"Resumed last session: {p} ({loaded} labeled cells)")
-            # Try to show session header
-            sess_hdr = p / "session.csv"
-            if sess_hdr.exists():
-                try:
-                    df_hdr = pd.read_csv(sess_hdr)
-                    if len(df_hdr) > 0:
-                        st.caption("Current session header:")
-                        st.dataframe(df_hdr.head(1), use_container_width=True)
-                except Exception:
-                    pass
-        else:
-            st.warning("No previous sessions found under the selected Save directory.")
-    st.markdown(":blue[Load previous session]")
-    load_session_dir = st.text_input("Existing session dir (optional)", value="", help="Path to an existing session folder containing labels.csv")
-    if st.button("Load session"):
-        p = Path(load_session_dir.strip())
-        if p.exists() and p.is_dir():
-            s.session_dir = str(p)
-            labels_csv = p / "labels.csv"
-            cell_map_csv = p / "cell_map.csv"
-            loaded = 0
-            if labels_csv.exists():
-                try:
-                    df_lab = pd.read_csv(labels_csv)
-                    s.label_map = {int(r.cell_index): {"label": str(r.label), "notes": str(r.notes) if not pd.isna(r.notes) else ""} for r in df_lab.itertuples(index=False)}
-                    loaded = len(s.label_map)
-                except Exception as e:
-                    st.error(f"Failed to read labels.csv: {e}")
-            if cell_map_csv.exists() and not s.cell_ids:
-                try:
-                    df_map = pd.read_csv(cell_map_csv)
-                    # ensure correct ordering by index
-                    df_map = df_map.sort_values("cell_index")
-                    s.cell_ids = [str(x) for x in df_map["cell_id"].tolist()]
-                except Exception as e:
-                    st.warning(f"Could not read cell_map.csv: {e}")
-            st.success(f"Loaded session from {p} ({loaded} labeled cells)")
-            # Show session header if exists
-            sess_hdr = p / "session.csv"
-            if sess_hdr.exists():
-                try:
-                    df_hdr = pd.read_csv(sess_hdr)
-                    if len(df_hdr) > 0:
-                        st.caption("Loaded session header:")
-                        st.dataframe(df_hdr.head(1), use_container_width=True)
-                except Exception:
-                    pass
-        else:
-            st.warning("Enter a valid existing session directory path.")
-    st.markdown('---')
-    st.header("Cell IDs")
-    # Persist config in session
-    s.setdefault("cell_ids_mode", "file")
-    s.setdefault("cell_id_prefix", "cell_")
-    s.setdefault("cell_id_pad", 5)
-    s.setdefault("cell_id_start", 0)
 
-    mode_label = {"file": "From file (columns / embedded)", "auto": "Auto-generate"}
-    cell_id_mode = st.radio(
-        "Cell ID source",
-        [mode_label["file"], mode_label["auto"]],
-        index=0 if s.get("cell_ids_mode") == "file" else 1,
-        help="Use cell IDs from the uploaded file (CSV columns or NPZ 'cell_ids'), or generate IDs."
-    )
-    s.cell_ids_mode = "file" if cell_id_mode == mode_label["file"] else "auto"
-
-    col_ids1, col_ids2, col_ids3 = st.columns(3)
-    s.cell_id_prefix = col_ids1.text_input("Auto ID prefix", value=s.get("cell_id_prefix", "cell_"))
-    s.cell_id_pad = col_ids2.number_input("Zero pad", min_value=1, max_value=8, value=int(s.get("cell_id_pad", 5)), step=1)
-    s.cell_id_start = col_ids3.number_input("Start index", min_value=0, max_value=1000000, value=int(s.get("cell_id_start", 0)), step=1)
-    # Add checkbox for preferring existing cell_map
-    prefer_existing = st.checkbox(
-        "Use existing cell_map if found",
-        value=True,
-        help="When starting a new session for the same recording_id, reuse the latest cell_map.csv found under the Save directory."
-    )
-
-    st.markdown('---')
-    st.header("Signal settings")
-    fs_hz = st.number_input("Sampling rate (Hz)", min_value=0.1, value=10.0, step=0.1)
-    smooth = st.checkbox("Apply Savitzky–Golay smoothing", value=True)
-    window = st.slider("Smooth window", 5, 101, 31, step=2)
-    poly = st.slider("Smooth polyorder", 1, 5, 3)
-    baseline_method = st.selectbox("Baseline method", ["rolling_median", "percentile (25)"])
-    window_s = st.slider("Rolling median window (s)", 5, 60, 20)
-    k = st.slider("SD threshold k", 1.0, 6.0, 3.0, step=0.5)
-    stim_time_s = st.number_input("Stimulus time (s)", min_value=0.0, value=5.0, help="Time when stimulation starts; used for dual-SD shading")
-    st.markdown('---')
-    if st.button("Confirm labeling parameters"):
-        s.params_confirmed = True
-        s.stage = max(s.stage, 4)
-        st.success("Parameters confirmed for this session.")
-
-    # --- About & Help expander ---
-    with st.expander("About & Help"):
-        st.markdown("**OPCAL‑Labeler** is a local tool for manual labeling of calcium imaging traces. Data never leaves your machine.")
-        st.markdown("**Labels:** High‑flat · High‑oscillatory · Oscillatory · Low‑activity · Uncertain · Drifting")
-        st.markdown("**Thresholds:** Dual SD envelopes – pre‑stimulus (green) and post‑stimulus (red). Adjust *k* and stimulus time in the sidebar.")
-        img = Path(__file__).parent / "assets" / "sd_threshold.png"
-        if img.exists():
-            st.image(str(img), caption="Standard deviation thresholds (illustration)")
-        st.markdown(f"<span class='small-muted'>Version {APP_VERSION}. For citation, include the tool name and version.</span>", unsafe_allow_html=True)
-
-
-#
-# --- Data loading (CSV / NPZ) ---
-st.subheader("Step 2 — Upload & indexing")
-st.caption("Supported formats: CSV (rows=time, columns=cells) and NPZ (keys: traces, optional: cell_ids, recording_id).")
-uploaded = st.file_uploader(
-    "Upload data file (CSV / NPZ)",
-    type=["csv", "npz"],
-    accept_multiple_files=False,
-    help="CSV: rows=time, columns=cells. NPZ: required key 'traces' (T×N), optional 'cell_ids', 'recording_id'. You can also drag & drop a file here."
-)
-if not uploaded:
-    st.info("Drag & drop a CSV/NPZ file here. After upload, set options in the left sidebar and press **Start / Update Session**.")
-else:
-    st.caption(f"Selected file: **{uploaded.name}**")
-
-s = st.session_state
-s.setdefault("labels", [])
-s.setdefault("current_cell", 0)
-s.setdefault("traces", None)
-s.setdefault("cell_ids", [])
-s.setdefault("recording_id", "rec_001")
-s.setdefault("session_dir", None)
-s.setdefault("annotator", annotator)
-s.setdefault("save_dir", save_dir)
-s.setdefault("label_map", {})
-s.setdefault("prev_cell", None)
-
-if uploaded:
-    suffix = Path(uploaded.name).suffix.lower()
-    if suffix == ".csv":
-        df = pd.read_csv(uploaded)
-        s.traces = df.values
-        Ncols = s.traces.shape[1]
-        if s.get("cell_ids_mode") == "file" and all(str(c).lower() != "unnamed: 0" for c in df.columns):
-            s.cell_ids = list(df.columns.astype(str))
-        else:
-            pad = int(s.get("cell_id_pad", 5))
-            start = int(s.get("cell_id_start", 0))
-            prefix = str(s.get("cell_id_prefix", "cell_"))
-            s.cell_ids = [f"{prefix}{i+start:0{pad}d}" for i in range(Ncols)]
-    else:
-        npz = np.load(uploaded, allow_pickle=True)
-        s.traces = npz["traces"]
-        Ncols = s.traces.shape[1]
-        if s.get("cell_ids_mode") == "file" and "cell_ids" in npz:
-            try:
-                arr = npz["cell_ids"]
-                s.cell_ids = [str(x) for x in (arr.tolist() if hasattr(arr, "tolist") else list(arr))]
-            except Exception:
-                pad = int(s.get("cell_id_pad", 5))
-                start = int(s.get("cell_id_start", 0))
-                prefix = str(s.get("cell_id_prefix", "cell_"))
-                s.cell_ids = [f"{prefix}{i+start:0{pad}d}" for i in range(Ncols)]
-        else:
-            pad = int(s.get("cell_id_pad", 5))
-            start = int(s.get("cell_id_start", 0))
-            prefix = str(s.get("cell_id_prefix", "cell_"))
-            s.cell_ids = [f"{prefix}{i+start:0{pad}d}" for i in range(Ncols)]
-        if "recording_id" in npz:
-            s.recording_id = str(npz["recording_id"]) 
-    s.current_cell = 0
-    s.stage = max(s.stage, 3)
-    # Warn on duplicate IDs
-    if len(set(s.cell_ids)) != len(s.cell_ids):
-        st.warning("Duplicate cell IDs detected. Consider switching to Auto-generate or adjusting prefix/padding/start.")
-    st.success(f"Loaded traces: shape {s.traces.shape}")
-
-if start_session and s.traces is not None:
-    s.annotator = annotator.strip() or "anon"
-    s.save_dir = save_dir.strip() or str(Path.home() / "OPCAL_LABELS")
+# --- Create session folder once traces & user meta exist (no sidebar flow) ---
+if s.get("annotator") and s.get("save_dir") and (s.get("traces") is not None) and not s.get("session_dir"):
     base_dir = Path(s.save_dir)
-    s.session_dir = make_session_dir(base_dir, s.recording_id, s.annotator)
-    write_session_header(
-        s.session_dir,
-        {
-            "session_id": Path(s.session_dir).name,
-            "recording_id": s.recording_id,
-            "annotator_id": s.annotator,
-            "fs_hz": fs_hz,
-            "started_utc": now_utc_iso(),
-            "app_version": APP_VERSION,
-            "source_path": uploaded.name if uploaded else "",
-            "source_sha256": "",
-        },
-    )
-    Ncols = s.traces.shape[1]
-    s.current_cell = 0  # reset navigation at session start
-    s.stage = max(s.stage, 3)
-    imported_map = False
-    # Try to reuse a previous cell_map for this recording_id
-    try:
-        if prefer_existing:
-            rec_dir = Path(s.save_dir) / s.recording_id
-            if rec_dir.exists():
-                candidates = []
-                for sess_dir in rec_dir.iterdir():
-                    if (sess_dir / "cell_map.csv").exists():
-                        try:
-                            mtime = (sess_dir / "cell_map.csv").stat().st_mtime
-                            candidates.append((mtime, sess_dir))
-                        except Exception:
-                            pass
-                if candidates:
-                    candidates.sort(reverse=True)
-                    last_map_dir = candidates[0][1]
-                    import pandas as _pd
-                    df_map = _pd.read_csv(last_map_dir / "cell_map.csv")
-                    df_map = df_map.sort_values("cell_index")
-                    ids_from_map = [str(x) for x in df_map["cell_id"].tolist()]
-                    if len(ids_from_map) == Ncols:
-                        s.cell_ids = ids_from_map
-                        imported_map = True
-                        st.info(f"Reused cell_map from: {last_map_dir}")
-                    else:
-                        st.warning("Existing cell_map length does not match current data; generating IDs.")
-    except Exception as e:
-        st.warning(f"Could not reuse previous cell_map: {e}")
-
-    # Fallbacks if we still have no IDs
-    if not s.cell_ids or len(s.cell_ids) != Ncols:
-        if s.get("cell_ids_mode") == "file":
-            # If mode=file but no valid IDs available, generate
-            pad = int(s.get("cell_id_pad", 5))
-            start = int(s.get("cell_id_start", 0))
-            prefix = str(s.get("cell_id_prefix", "cell_"))
-            s.cell_ids = [f"{prefix}{i+start:0{pad}d}" for i in range(Ncols)]
-        else:
-            pad = int(s.get("cell_id_pad", 5))
-            start = int(s.get("cell_id_start", 0))
-            prefix = str(s.get("cell_id_prefix", "cell_"))
-            s.cell_ids = [f"{prefix}{i+start:0{pad}d}" for i in range(Ncols)]
-
-    write_cell_map(
-        s.session_dir, [{"cell_index": i, "cell_id": s.cell_ids[i]} for i in range(len(s.cell_ids))]
-    )
-    st.success(f"Session folder: {s.session_dir}")
-    _log(f"session_start annotator={s.annotator} recording_id={s.recording_id}")
-    # Preview the newly created session header
-    try:
-        import pandas as _pd
-        _hdr = _pd.read_csv(Path(s.session_dir) / "session.csv")
-        if len(_hdr) > 0:
-            st.caption("New session header:")
-            st.dataframe(_hdr.head(1), use_container_width=True)
-    except Exception:
-        pass
-
-# If user started a session before uploading data, create a session folder shell (no traces yet)
-if start_session and s.traces is None:
-    s.annotator = annotator.strip() or s.get("annotator", "anon")
-    s.save_dir = save_dir.strip() or s.get("save_dir", str(Path.home() / "OPCAL_LABELS"))
-    base_dir = Path(s.save_dir)
-    rec_id = s.get("recording_id", f"rec_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+    rec_id = s.get("recording_id") or f"rec_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     s.session_dir = make_session_dir(base_dir, rec_id, s.annotator)
     write_session_header(
         s.session_dir,
@@ -469,43 +176,43 @@ if start_session and s.traces is None:
             "session_id": Path(s.session_dir).name,
             "recording_id": rec_id,
             "annotator_id": s.annotator,
-            "fs_hz": 0.0,
+            "fs_hz": float(s.get("fs_hz", 10.0)),
             "started_utc": now_utc_iso(),
             "app_version": APP_VERSION,
             "source_path": "",
             "source_sha256": "",
         },
     )
-    st.success(f"Session folder: {s.session_dir}")
+    if s.get("cell_ids"):
+        write_cell_map(
+            s.session_dir, [{"cell_index": i, "cell_id": s.cell_ids[i]} for i in range(len(s.cell_ids))]
+        )
     _log(f"session_start annotator={s.annotator} recording_id={rec_id}")
-    s.stage = max(s.stage, 2)
 
-# --- Main workspace: navigation, visualization, labeling (screen) ---
-if s.stage >= 4 and s.traces is not None and s.get("session_dir"):
+# --- Stage router: show only the current stage screen ---
+from opcal_mlt.app.screens import render_start_session, render_upload_and_indexing, render_params
+if s.stage == 1:
+    render_start_session(s=s)
+elif s.stage == 2:
+    render_upload_and_indexing(s=s)
+elif s.stage == 3:
+    render_params(s=s)
+elif s.stage >= 4 and s.get("traces") is not None and s.get("session_dir"):
     params = {
-        "fs_hz": fs_hz,
-        "smooth": smooth,
-        "window": window,
-        "poly": poly,
-        "baseline_method": baseline_method,
-        "window_s": window_s,
-        "k": k,
-        "stim_time_s": stim_time_s,
+        "fs_hz": float(s.get("fs_hz", 10.0)),
+        "smooth": bool(s.get("smooth", True)),
+        "window": int(s.get("window", 31)),
+        "poly": int(s.get("poly", 3)),
+        "baseline_method": str(s.get("baseline_method", "rolling_median")),
+        "window_s": int(s.get("window_s", 20)),
+        "k": float(s.get("k", 3.0)),
+        "stim_time_s": float(s.get("stim_time_s", 5.0)),
     }
     theme = THEMES[st.session_state.get("theme", "Light")]
     render_labeling_workspace(s=s, params=params, theme=theme, logger=_log)
     render_finish_export(st.session_state)
 else:
-    if s.stage == 1:
-        st.info("Step 1 — Start a new session in the left sidebar.")
-    elif s.stage == 2:
-        st.info("Step 2 — Upload a CSV/NPZ file and choose indexing in the sidebar.")
-    elif s.stage == 3:
-        st.info("Step 3 — Adjust labeling parameters in the left sidebar and click “Confirm labeling parameters”.")
-    elif s.stage == 5:
-        st.success("Step 5 — Session finished. You can export a ZIP archive or start a new session.")
-    else:
-        st.info("Follow the steps above to begin.")
+    st.info("Follow the steps above to begin.")
 
 # --- Footer & legal note ---
 st.markdown("---")
