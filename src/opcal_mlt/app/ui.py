@@ -2,93 +2,85 @@ from __future__ import annotations
 import streamlit as st
 
 def inject_theme_css(palette: dict) -> None:
-    st.markdown(
-        f"""
-        <style>
-        :root {{
-          --bg: {palette["bg"]};
-          --panel: {palette["panel"]};
-          --border: {palette["border"]};
-          --text: {palette["text"]};
-          --muted: {palette["muted"]};
-          --accent: {palette["accent"]};
-        }}
-        html, body, [data-testid="stAppViewContainer"] {{
-          background: var(--bg) !important;
-          color: var(--text) !important;
-        }}
-        [data-testid="stSidebar"] {{
-          background: var(--panel) !important;
-          border-right: 1px solid var(--border);
-        }}
-        /* Sidebar width: keep it compact so plots aren't squashed */
-        [data-testid="stSidebar"] {{
-          width: 320px !important;
-          min-width: 320px !important;
-        }}
-        /* Force sidebar to be visible by default; allow collapsing via a body class */
-        /* (removed default forced visible rule to allow full collapse) */
-        body.sb-collapsed [data-testid="stSidebar"] {{
-          transform: translateX(-110%) !important;
-          opacity: 0 !important;
-          pointer-events: none !important;
-        }}
-        /* Some Streamlit builds wrap the content in an inner container */
-        [data-testid="stSidebar"] section[tabindex="0"] {{
-          width: 320px !important;
-          min-width: 320px !important;
-        }}
-        [data-testid="stStatusWidget"], #MainMenu, footer {{visibility: hidden !important;}}
-        [data-testid="stToolbar"] {{ display: none !important; }}
-        .block-container {{padding-top: 3.2rem;}}
-        h1, h2, h3 {{overflow: visible !important;}}
-        .stMarkdown p, label, .stTextInput>div>div>input {{
-          font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji';
-        }}
-        /* Text inputs: ensure visible, bordered, padded, white background */
-        div[data-testid="stTextInput"] input {{
-          background-color: #fff !important;
-          border: 1px solid #ccc !important;
-          padding: 6px 10px !important;
-          color: var(--text) !important;
-          opacity: 1 !important;
-        }}
-        .stTextInput input {{
-          background-color: #fff !important;
-          border: 1px solid #ccc !important;
-          padding: 6px 10px !important;
-          color: var(--text) !important;
-          opacity: 1 !important;
-        }}
+    # Build CSS in two parts to avoid f-string `{}` parsing problems
+    css_vars = f"""
+    :root {{
+      --bg: {palette["bg"]};
+      --panel: {palette["panel"]};
+      --border: {palette["border"]};
+      --text: {palette["text"]};
+      --muted: {palette["muted"]};
+      --accent: {palette["accent"]};
+    }}
+    """
 
-        /* App title */
-        .app-title {{display:flex; align-items:center; justify-content:center; flex-direction:column; gap:4px; margin-bottom:.5rem;}}
-        .app-title-main {{font-size: 2.35rem; font-weight: 800; letter-spacing:0.2px; margin:0; color: var(--text); text-align:center;}}
-        .app-title-sub {{color: var(--muted); font-size: 1.05rem; text-align:center;}}
+    css_static = """
+    html, body, [data-testid="stAppViewContainer"] {
+      background: var(--bg) !important;
+      color: var(--text) !important;
+    }
+    [data-testid="stSidebar"] {
+      background: var(--panel) !important;
+      border-right: 1px solid var(--border);
+      width: 320px !important;
+      min-width: 320px !important;
+    }
+    /* Allow full collapse via body class */
+    body.sb-collapsed [data-testid="stSidebar"] {
+      transform: translateX(-110%) !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+    /* Some Streamlit builds wrap the content in an inner container */
+    [data-testid="stSidebar"] section[tabindex="0"] {
+      width: 320px !important;
+      min-width: 320px !important;
+    }
 
-        /* Panels */
-        .block-container > div:first-child {{background: var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px 18px;}}
-        .top-right-logo {{position: absolute; top: 16px; right: 20px; width: 96px; max-width: 20vw;}}
-        .hint {{margin: 0.25rem 0 0.75rem 0; color: var(--muted); font-size: 0.95rem;}}
+    [data-testid="stStatusWidget"], #MainMenu, footer { visibility: hidden !important; }
+    [data-testid="stToolbar"] { display: none !important; }
+    .block-container { padding-top: 3.2rem; }
+    h1, h2, h3 { overflow: visible !important; }
 
-        .step-header {{ font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0 0.75rem; }}
+    /* Hide Streamlit's heading anchor (paperclip) across versions */
+    .stHeading a.anchor-link,
+    .stHeading .heading-anchor,
+    .stHeading button[aria-label="Copy header link"] {
+      display: none !important;
+    }
 
-        /* Stepper */
-        .stepper {{display:flex;gap:12px;margin:10px 0 12px 0;flex-wrap:wrap; justify-content:center;}}
-        .step {{display:flex;align-items:center;gap:8px;color:var(--muted);}}
-        .step .num {{width:24px;height:24px;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.95rem;}}
-        .step.active {{color:var(--text);}}
-        .step.active .num {{background:var(--accent); border-color:var(--accent); color:#fff;}}
-        .step.done .num {{background:var(--border); color:var(--text);}}
+    .stMarkdown p, label, .stTextInput>div>div>input {
+      font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji';
+    }
+    /* Text inputs: ensure visible, bordered, padded, white background */
+    div[data-testid="stTextInput"] input,
+    .stTextInput input {
+      background-color: #fff !important;
+      border: 1px solid #ccc !important;
+      padding: 6px 10px !important;
+      color: var(--text) !important;
+      opacity: 1 !important;
+    }
 
-        /* Section headings */
-        .stHeading h2 {{font-size:1.35rem;}}
-        .stHeading h3 {{font-size:1.1rem;}}
-        .disabled-pane {{opacity: .45; pointer-events: none; filter: grayscale(20%);}}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    /* App title */
+    .app-title {display:flex; align-items:center; justify-content:center; flex-direction:column; gap:4px; margin-bottom:.5rem;}
+    .app-title-main {font-size: 2.35rem; font-weight: 800; letter-spacing:0.2px; margin:0; color: var(--text); text-align:center;}
+    .app-title-sub {color: var(--muted); font-size: 1.05rem; text-align:center;}
+
+    /* Panels */
+    .block-container > div:first-child {background: var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px 18px;}
+    .top-right-logo {position: absolute; top: 16px; right: 20px; width: 96px; max-width: 20vw;}
+    .hint {margin: 0.25rem 0 0.75rem 0; color: var(--muted); font-size: 0.95rem;}
+
+    .step-header { font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0 0.75rem; }
+
+    /* Section headings */
+    .stHeading h2 {font-size:1.35rem;}
+    .stHeading h3 {font-size:1.1rem;}
+    .disabled-pane {opacity: .45; pointer-events: none; filter: grayscale(20%);}
+    """
+
+    st.markdown(f"<style>{css_vars}{css_static}</style>", unsafe_allow_html=True)
 
 def render_stepper_and_tips(stage: int) -> None:
     labels_steps = [
