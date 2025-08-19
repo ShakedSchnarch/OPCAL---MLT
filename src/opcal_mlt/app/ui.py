@@ -40,6 +40,8 @@ def inject_theme_css(palette: dict) -> None:
     [data-testid="stStatusWidget"], #MainMenu, footer { visibility: hidden !important; }
     [data-testid="stToolbar"] { display: none !important; }
     .block-container { padding-top: 3.2rem; }
+    .block-container { padding-right: 0; }
+    /* legacy in-panel logo rules no longer used */
     h1, h2, h3 { overflow: visible !important; }
 
     /* Hide Streamlit's heading anchor (paperclip) across versions */
@@ -63,18 +65,20 @@ def inject_theme_css(palette: dict) -> None:
     }
 
     /* App title */
-    .app-title {display:flex; align-items:center; justify-content:center; flex-direction:column; gap:4px; margin-bottom:.5rem;}
+    .app-title {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: .5rem;
+      position: relative;
+    }
     .app-title-main {font-size: 2.35rem; font-weight: 800; letter-spacing:0.2px; margin:0; color: var(--text); text-align:center;}
     .app-title-sub {color: var(--muted); font-size: 1.05rem; text-align:center;}
 
     /* Panels */
     .block-container > div:first-child {background: var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 16px;}
-    .top-right-logo {
-      position: absolute; top: 16px; right: 20px;
-      width: 120px; max-width: 24vw; height: auto;
-      z-index: 9999; pointer-events: none;
-      opacity: .98;
-    }
     /* Reusable card container */
     .card {
       background: var(--panel);
@@ -206,10 +210,6 @@ def render_stepper_and_tips(stage: int) -> None:
         )
     elif current_step == 2:
         st.markdown('<div class="hint"><b>Tip:</b> Upload a CSV/NPZ and choose how to assign cell IDs (from file or auto-generate).</div>', unsafe_allow_html=True)
-    elif current_step == 3:
-        st.markdown(
-            '<div class="hint"><b>Tip:</b> Calibrate preprocessing (smoothing), set thresholds, then navigate cells and assign labels/notes. You can undo the last save.</div>',
-            unsafe_allow_html=True,
-        )
-    else:
+    # Step 3 hint intentionally removed
+    elif current_step == 4:
         st.markdown('<div class="hint"><b>Tip:</b> Export a ZIP archive of the session folder for sharing or backup.</div>', unsafe_allow_html=True)

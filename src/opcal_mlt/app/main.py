@@ -42,6 +42,7 @@ s.setdefault("current_cell", 0)
 s.setdefault("traces", None)
 s.setdefault("cell_ids", None)
 s.setdefault("session_dir", "")
+s.setdefault("history", [])
 
 s.setdefault("fs_hz", 1.08)
 s.setdefault("smooth", True)
@@ -150,17 +151,6 @@ st.markdown(
 
 inject_theme_css(THEMES[st.session_state.get("theme", "Light")])
 
-# Render top-right logo (prefer no-background version if available), embed as base64 for reliability
-try:
-    nb_logo = assets_dir / "no_background_logo.png"
-    src_path = nb_logo if nb_logo.exists() else _logo_for_icon
-    if src_path.exists():
-        with open(src_path, "rb") as f:
-            b64 = base64.b64encode(f.read()).decode("ascii")
-            mime = "image/png"
-            st.markdown(f"<img class='top-right-logo' src='data:{mime};base64,{b64}' alt='logo' />", unsafe_allow_html=True)
-except Exception:
-    pass
 
 # === Top stepper (4 stages) ===
 # Do not auto‑advance between screens; only guard illegal entry to Step 3.

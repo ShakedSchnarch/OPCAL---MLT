@@ -26,7 +26,209 @@ import plotly.graph_objects as go
 from opcal_mlt.core import preprocess as pp
 from opcal_mlt.core import peaks as pk
 from opcal_mlt.core import features as ft
+
 from opcal_mlt.app.session_io import append_labels, append_peaks
+
+# --- Helpers ---------------------------------------------------------------
+
+def _ensure_workspace_state(s) -> bool:
+    """Make sure all session_state keys used by the labeling workspace exist.
+    Returns True if required data (traces & cell_ids) exist, otherwise renders a
+    warning and returns False.
+    """
+    if "label_map" not in s or not isinstance(s.label_map, dict):
+        s.label_map = {}
+    if "current_cell" not in s:
+        s.current_cell = 0
+    if "history" not in s or not isinstance(s.get("history"), list):
+        s["history"] = []
+    if s.get("traces") is None or s.get("cell_ids") is None:
+        st.warning("No data loaded yet. Go back to Step 2 (Upload & indexing).")
+        return False
+
+    return True
+
+
+
+def _render_sidebar_params(s):
+    """Render sidebar parameters and persist values in session state.
+    Keeps behavior identical; only extracts UI into a helper for readability.
+    """
+    with st.sidebar:
+        st.markdown("### Labeling parameters")
+        s.fs_hz = st.number_input(
+            "Sampling rate (Hz)",
+            min_value=0.01,
+            value=float(s.get("fs_hz", 1.08)),
+            step=0.01,
+            format="%.2f",
+            help="Default is 1.08 Hz (≈0.93 s/sample)",
+        )
+        s.show_raw = st.checkbox(
+            "Show raw signal",
+            value=bool(s.get("show_raw", True)),
+            help="Toggle the original unfiltered trace.",
+        )
+        s.show_smoothed = st.checkbox(
+            "Show smoothed signal",
+            value=bool(s.get("show_smoothed", True)),
+            help="Toggle the Savitzky–Golay smoothed trace (when smoothing is enabled).",
+        )
+        s.smooth = st.checkbox(
+            "Apply Savitzky–Golay smoothing",
+            value=bool(s.get("smooth", True)),
+            help=(
+                "Phase-preserving smoothing that reduces noise without shifting peaks. "
+                "Turn off to view the raw signal."
+            ),
+        )
+        if not s.smooth:
+            s.show_smoothed = False
+        if s.smooth:
+            _win_default = int(s.get("window", 31))
+            if _win_default % 2 == 0:
+                _win_default += 1
+            s.window = st.slider(
+                "Smoothing window (samples)",
+                5,
+                101,
+                _win_default,
+                step=2,
+                help=(
+                    "Length of the Savitzky–Golay window in samples (must be odd). "
+                    "Larger windows produce stronger smoothing but can flatten short events. "
+                    "Typical: 21–61."
+                ),
+            )
+            s.poly = st.slider(
+                "Polynomial order",
+                1,
+                5,
+                int(s.get("poly", 3)),
+                help=(
+                    "Order of the fitted polynomial within each window. "
+                    "Lower values = gentler smoothing; higher values = more flexible curve. "
+                    "Must be less than the window size. Typical: 2–3."
+                ),
+            )
+        s.baseline_method = st.selectbox(
+            "Baseline method",
+            ["rolling_median", "percentile (25)"],
+            index=0 if str(s.get("baseline_method", "rolling_median")).startswith("rolling") else 1,
+        )
+        s.window_s = st.slider("Rolling median window (s)", 5, 60, int(s.get("window_s", 20)))
+        s.k = st.slider("SD threshold k", 1.0, 6.0, float(s.get("k", 3.0)), step=0.5)
+
+        # Stimulus default derived from trace length and fs
+        _fs_guess = float(s.get("fs_hz", 1.08))
+        _T = int(getattr(s.traces, "shape", [0, 0])[0]) if s.get("traces") is not None else 0
+        _dur_s = (_T / _fs_guess) if _fs_guess > 0 else 0.0
+        _stim_default = float(
+            s.get(
+                "stim_time_s",
+                min(max(30.0 / max(_fs_guess, 1e-9), 10.0), max(1.0, 0.4 * _dur_s)),
+            )
+        )
+        s.stim_time_s = st.number_input(
+            "Stimulus time (s)",
+            min_value=0.0,
+            value=float(_stim_default),
+            step=1.0,
+            help=("Time when stimulation starts; used for dual-SD thresholds."),
+        )
+
+
+def _render_navigation_and_progress(col, s, N: int, theme: dict) -> None:
+    """Left column: session info, cell selector, and progress strip.
+    Keeps existing behavior; only extracted for readability.
+    """
+    with col:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("Cells")
+        if s.get("session_dir"):
+            st.caption(f"Session: {s.session_dir}")
+        idx = st.number_input("Cell index", 0, N-1, int(s.current_cell), step=1)
+        s.current_cell = int(idx)
+
+        # When navigating, pre-fill widgets with any existing label for this cell
+        if s.get("prev_cell") != s.current_cell:
+            existing = s.label_map.get(int(s.current_cell))
+            st.session_state["label_value"] = existing["label"] if existing else "Oscillatory"
+            st.session_state["notes_value"] = existing["notes"] if existing else ""
+            st.session_state["uncertain_value"] = bool(existing.get("uncertain", False)) if existing else False
+            s.prev_cell = s.current_cell
+
+        # Progress bar + mini status strip
+        progress = int((len(s.label_map) / max(1, N)) * 100)
+        st.markdown(
+            f'<div class="progress-track"><div class="progress-fill" style="width:{progress}%;"></div></div>',
+            unsafe_allow_html=True,
+        )
+        status = np.zeros(N, dtype=int)
+        for ci in s.label_map.keys():
+            if 0 <= int(ci) < N:
+                status[int(ci)] = 1
+        fig_status = go.Figure(
+            go.Bar(
+                x=list(range(N)),
+                y=status,
+                marker_color=[theme["status_unlabeled"] if v == 0 else theme["status_labeled"] for v in status],
+            )
+        )
+        fig_status.update_yaxes(visible=False)
+        fig_status.update_xaxes(title_text="Cells", tickmode="auto", nticks=10)
+        fig_status.update_layout(height=90, margin=dict(l=4, r=4, t=4, b=4))
+        st.plotly_chart(fig_status, use_container_width=True)
+
+        st.write(f"Progress: {len(s.label_map)} / {N} labeled")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+
+# --- Helper for processing signal for a cell ---
+def _process_trace_for_cell(s):
+    """Compute processed signals and thresholds for the currently selected cell.
+    Reads parameters from session state. Returns a dict with keys:
+    x, x_s, base, thr_pre, thr_post, thr, peaks, t, stim_idx, fs_hz, k, smooth, show_raw, show_smoothed.
+    """
+    fs_hz = float(s.get("fs_hz", 1.08))
+    smooth = bool(s.get("smooth", True))
+    window = int(s.get("window", 31))
+    poly = int(s.get("poly", 3))
+    baseline_method = str(s.get("baseline_method", "rolling_median"))
+    window_s = int(s.get("window_s", 20))
+    k = float(s.get("k", 3.0))
+    stim_time_s = float(s.get("stim_time_s", 5.0))
+
+    x = s.traces[:, s.current_cell].astype(float)
+    x_s = pp.smooth_signal(x, window=window, polyorder=poly) if smooth else x
+    base = (
+        pp.baseline_rolling_median(x_s, fs_hz, window_s=window_s)
+        if baseline_method.startswith("rolling")
+        else pp.baseline_percentile(x_s, q=25.0)
+    )
+    thr_pre, thr_post, sd_pre, sd_post, stim_idx = pp.dual_sd_thresholds(
+        x_s, base, fs_hz, stim_time_s, k=k
+    )
+    thr = np.concatenate([thr_pre, thr_post])
+    peaks = pk.detect_peaks(x_s, thr, fs_hz, min_distance_s=1.0)
+    t = np.arange(x.size) / fs_hz
+
+    return {
+        "x": x,
+        "x_s": x_s,
+        "base": base,
+        "thr_pre": thr_pre,
+        "thr_post": thr_post,
+        "thr": thr,
+        "peaks": peaks,
+        "t": t,
+        "stim_idx": int(stim_idx),
+        "fs_hz": fs_hz,
+        "k": k,
+        "smooth": smooth,
+        "show_raw": bool(s.get("show_raw", True)),
+        "show_smoothed": bool(s.get("show_smoothed", True)),
+    }
 
 
 def render_finish_export(session_state) -> None:
@@ -380,171 +582,42 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
         """,
         height=0,
     )
-    # Safety: initialize state keys used below
-    if "label_map" not in s or not isinstance(s.label_map, dict):
-        s.label_map = {}
-    if "current_cell" not in s:
-        s.current_cell = 0
-    if s.get("traces") is None or s.get("cell_ids") is None:
-        st.warning("No data loaded yet. Go back to Step 2 (Upload & indexing).")
+    if not _ensure_workspace_state(s):
         return
-    # Estimate duration using current (or default) fs to derive stable defaults
-    _fs_guess = float(s.get("fs_hz", 1.08))
-    _T = int(getattr(s.traces, "shape", [0, 0])[0])
-    _dur_s = (_T / _fs_guess) if _fs_guess > 0 else 0.0
-    # Default stimulus time ensures at least ~30 samples (or 10 s) before the split,
-    # but not more than ~40% of the recording to avoid a tiny post segment.
-    _stim_default = float(
-        s.get(
-            "stim_time_s",
-            min(max(30.0 / max(_fs_guess, 1e-9), 10.0), max(1.0, 0.4 * _dur_s)),
-        )
-    )
     # Sidebar: processing/labeling parameters
-    with st.sidebar:
-        st.markdown("### Labeling parameters")
-        s.fs_hz = st.number_input(
-            "Sampling rate (Hz)",
-            min_value=0.01,
-            value=float(s.get("fs_hz", 1.08)),
-            step=0.01,
-            format="%.2f",
-            help="Default is 1.08 Hz (≈0.93 s/sample)"
-        )
-        # Plot visibility preferences (persist across reruns)
-        s.show_raw = st.checkbox(
-            "Show raw signal",
-            value=bool(s.get("show_raw", True)),
-            help="Toggle the original unfiltered trace.",
-        )
-        s.show_smoothed = st.checkbox(
-            "Show smoothed signal",
-            value=bool(s.get("show_smoothed", True)),
-            help="Toggle the Savitzky–Golay smoothed trace (when smoothing is enabled).",
-        )
-        # --- Preprocessing – Smoothing (moved back to Step 3) ---
-        s.smooth = st.checkbox(
-            "Apply Savitzky–Golay smoothing",
-            value=bool(s.get("smooth", True)),
-            help=(
-                "Phase-preserving smoothing that reduces noise without shifting peaks. "
-                "Turn off to view the raw signal."
-            ),
-        )
-        if not s.smooth:
-            s.show_smoothed = False
-        if s.smooth:
-            # Window slider uses odd values only (step=2), default coerced to odd
-            _win_default = int(s.get("window", 31))
-            if _win_default % 2 == 0:
-                _win_default += 1
-            s.window = st.slider(
-                "Smoothing window (samples)",
-                5, 101, _win_default, step=2,
-                help=(
-                    "Length of the Savitzky–Golay window in samples (must be odd). "
-                    "Larger windows produce stronger smoothing but can flatten short events. "
-                    "Typical: 21–61."
-                ),
-            )
-            s.poly = st.slider(
-                "Polynomial order",
-                1, 5, int(s.get("poly", 3)),
-                help=(
-                    "Order of the fitted polynomial within each window. "
-                    "Lower values = gentler smoothing; higher values = more flexible curve. "
-                    "Must be less than the window size. Typical: 2–3."
-                ),
-            )
-        s.baseline_method = st.selectbox("Baseline method", ["rolling_median", "percentile (25)"], index=0 if str(s.get("baseline_method","rolling_median")).startswith("rolling") else 1)
-        s.window_s = st.slider("Rolling median window (s)", 5, 60, int(s.get("window_s", 20)))
-        s.k = st.slider("SD threshold k", 1.0, 6.0, float(s.get("k", 3.0)), step=0.5)
-        s.stim_time_s = st.number_input(
-            "Stimulus time (s)",
-            min_value=0.0,
-            value=float(_stim_default),
-            step=1.0,
-            help=(
-                "Time when stimulation starts; used for dual-SD thresholds. "
-                "Default adapts to ensure ≥~30 samples (or 10 s) before the split."
-            ),
-        )
-    # Use latest state for processing
-    fs_hz      = float(s.get("fs_hz", 1.08))
-    smooth     = bool(s.get("smooth", True))
-    window     = int(s.get("window", 31))
-    poly       = int(s.get("poly", 3))
-    baseline_method = str(s.get("baseline_method", "rolling_median"))
-    window_s   = int(s.get("window_s", 20))
-    k          = float(s.get("k", 3.0))
-    stim_time_s= float(s.get("stim_time_s", 5.0))
-
+    _render_sidebar_params(s)
     T, N = s.traces.shape
     left, mid, right = st.columns([3, 8, 3], gap="small")
 
-    # -------- Left: navigation & progress --------
-    with left:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("Cells")
-        if s.get("session_dir"):
-            st.caption(f"Session: {s.session_dir}")
-        idx = st.number_input("Cell index", 0, N-1, s.current_cell, step=1)
-        s.current_cell = idx
-
-        # When the user navigates, reflect any existing label in the radio/textarea.
-        if s.get("prev_cell") != s.current_cell:
-            existing = s.label_map.get(int(s.current_cell))
-            st.session_state["label_value"] = existing["label"] if existing else "Oscillatory"
-            st.session_state["notes_value"] = existing["notes"] if existing else ""
-            st.session_state["uncertain_value"] = bool(existing.get("uncertain", False)) if existing else False
-            s.prev_cell = s.current_cell
-
-        # Progress bar + strip
-        progress = int((len(s.label_map) / max(1, N)) * 100)
-        st.markdown(f'<div class="progress-track"><div class="progress-fill" style="width:{progress}%;"></div></div>', unsafe_allow_html=True)
-        status = np.zeros(N, dtype=int)
-        for ci in s.label_map.keys():
-            if 0 <= int(ci) < N:
-                status[int(ci)] = 1
-        fig_status = go.Figure(go.Bar(
-            x=list(range(N)), y=status,
-            marker_color=[theme["status_unlabeled"] if v==0 else theme["status_labeled"] for v in status]
-        ))
-        fig_status.update_yaxes(visible=False)
-        fig_status.update_xaxes(title_text="Cells", tickmode="auto", nticks=10)
-        fig_status.update_layout(height=90, margin=dict(l=4,r=4,t=4,b=4))
-        st.plotly_chart(fig_status, use_container_width=True)
-
-        st.write(f"Progress: {len(s.label_map)} / {N} labeled")
-        st.markdown('</div>', unsafe_allow_html=True)
+    _render_navigation_and_progress(left, s, N, theme)
 
     # Middle: processing & plot
-    x = s.traces[:, s.current_cell].astype(float)
-    x_s = pp.smooth_signal(x, window=window, polyorder=poly) if smooth else x
-    base = pp.baseline_rolling_median(x_s, fs_hz, window_s=window_s) if baseline_method.startswith("rolling") else pp.baseline_percentile(x_s, q=25.0)
-    thr_pre, thr_post, sd_pre, sd_post, stim_idx = pp.dual_sd_thresholds(x_s, base, fs_hz, stim_time_s, k=k)
-    thr = np.concatenate([thr_pre, thr_post])
-    peaks = pk.detect_peaks(x_s, thr, fs_hz, min_distance_s=1.0)
-
+    data = _process_trace_for_cell(s)
     with mid:
         st.markdown(f"### Cell <code>{s.cell_ids[s.current_cell]}</code>", unsafe_allow_html=True)
-        t = np.arange(x.size)/fs_hz
         fig = go.Figure()
-        if bool(s.get("show_raw", True)):
-            fig.add_trace(go.Scatter(x=t, y=x, name="raw", line=dict(width=1)))
-        if smooth and bool(s.get("show_smoothed", True)):
-            fig.add_trace(go.Scatter(x=t, y=x_s, name="smoothed", line=dict(width=2)))
-        fig.add_trace(go.Scatter(x=t, y=base, name="baseline", line=dict(width=1, dash="dash")))
-        if stim_idx > 1:
-            fig.add_shape(type="rect",
-                          x0=t[0], x1=t[stim_idx-1], y0=base[:stim_idx].min(), y1=(thr_pre).max(),
-                          fillcolor=theme["shade_pre"], line=dict(width=0), layer="below")
-        fig.add_shape(type="rect",
-                      x0=t[stim_idx], x1=t[-1], y0=base[stim_idx:].min(), y1=(thr_post).max(),
-                      fillcolor=theme["shade_post"], line=dict(width=0), layer="below")
-        fig.add_trace(go.Scatter(x=t[:stim_idx],  y=thr_pre,  name=f"thr pre ({k}·SD)",  line=dict(width=1)))
-        fig.add_trace(go.Scatter(x=t[stim_idx:], y=thr_post, name=f"thr post ({k}·SD)", line=dict(width=1)))
-        fig.add_trace(go.Scatter(x=t[peaks], y=x_s[peaks], mode="markers", name="peaks"))
+        if data["show_raw"]:
+            fig.add_trace(go.Scatter(x=data["t"], y=data["x"], name="raw", line=dict(width=1)))
+        if data["smooth"] and data["show_smoothed"]:
+            fig.add_trace(go.Scatter(x=data["t"], y=data["x_s"], name="smoothed", line=dict(width=2)))
+        fig.add_trace(go.Scatter(x=data["t"], y=data["base"], name="baseline", line=dict(width=1, dash="dash")))
+        si = data["stim_idx"]
+        if si > 1:
+            fig.add_shape(
+                type="rect",
+                x0=data["t"][0], x1=data["t"][si - 1],
+                y0=data["base"][:si].min(), y1=(data["thr_pre"]).max(),
+                fillcolor=theme["shade_pre"], line=dict(width=0), layer="below",
+            )
+        fig.add_shape(
+            type="rect",
+            x0=data["t"][si], x1=data["t"][-1],
+            y0=data["base"][si:].min(), y1=(data["thr_post"]).max(),
+            fillcolor=theme["shade_post"], line=dict(width=0), layer="below",
+        )
+        fig.add_trace(go.Scatter(x=data["t"][:si],  y=data["thr_pre"],  name=f"thr pre ({data['k']}·SD)",  line=dict(width=1)))
+        fig.add_trace(go.Scatter(x=data["t"][si:], y=data["thr_post"], name=f"thr post ({data['k']}·SD)", line=dict(width=1)))
+        fig.add_trace(go.Scatter(x=data["t"][data["peaks"]], y=data["x_s"][data["peaks"]], mode="markers", name="peaks"))
         fig.update_layout(height=480, margin=dict(l=10, r=10, t=32, b=10))
         st.plotly_chart(fig, use_container_width=True)
 
@@ -561,7 +634,7 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
             label = st.session_state.get("label_value", "Oscillatory")
             notes = st.session_state.get("notes_value", "")
             uncertain = bool(st.session_state.get("uncertain_value", False))
-            feats = ft.basic_features(x_s, thr, fs_hz, peaks)
+            feats = ft.basic_features(data["x_s"], data["thr"], data["fs_hz"], data["peaks"])
             saved_utc = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
             lab_row = {
                 "session_id": Path(s.session_dir).name if s.session_dir else "nosession",
@@ -573,13 +646,13 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
                 "label": label,
                 "uncertain": uncertain,
                 "notes": notes,
-                "filter_type": "savgol" if smooth else "none",
-                "filter_window": int(window) if smooth else 0,
-                "filter_polyorder": int(poly) if smooth else 0,
-                "baseline_method": "rolling_median" if baseline_method.startswith("rolling") else "percentile",
-                "baseline_window_s_or_q": float(window_s) if baseline_method.startswith("rolling") else 25.0,
+                "filter_type": "savgol" if data["smooth"] else "none",
+                "filter_window": int(s.get("window", 31)) if data["smooth"] else 0,
+                "filter_polyorder": int(s.get("poly", 3)) if data["smooth"] else 0,
+                "baseline_method": "rolling_median" if str(s.get("baseline_method", "rolling_median")).startswith("rolling") else "percentile",
+                "baseline_window_s_or_q": float(s.get("window_s", 20)) if str(s.get("baseline_method", "rolling_median")).startswith("rolling") else 25.0,
                 "sd_method": "MAD",
-                "threshold_k": float(k),
+                "threshold_k": float(data["k"]),
                 "mean": float(feats["mean"]),
                 "std": float(feats["std"]),
                 "rms": float(feats["rms"]),
@@ -594,9 +667,9 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
                     "recording_id": s.recording_id,
                     "cell_index": int(s.current_cell),
                     "peak_idx": int(p),
-                    "peak_time_s": float(p)/fs_hz,
-                    "peak_value": float(x_s[p]),
-                } for p in peaks]
+                    "peak_time_s": float(p)/data["fs_hz"],
+                    "peak_value": float(data["x_s"][p]),
+                } for p in data["peaks"]]
                 append_peaks(Path(s.session_dir), peak_rows)
                 logger(f"save cell_index={int(s.current_cell)} label={label}")
                 s.label_map[int(s.current_cell)] = {"label": label, "notes": notes, "uncertain": uncertain}
