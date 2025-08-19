@@ -1,4 +1,4 @@
-# User Guide — OPCAL‑Labeler v0.4.0
+# User Guide — OPCAL‑Labeler v0.4.1
 
 OPCAL‑Labeler is a local **Streamlit** app for efficient, accurate labeling of calcium‑imaging traces. It guides you through a 4‑step flow: **Start → Upload → Label → Finish**. All data stays on your machine; session outputs are plain CSV files.
 
@@ -45,6 +45,7 @@ After a successful load, click **Next** to enter the labeling workspace.
 - Adjust parameters in the **sidebar** (smoothing, baseline, robust SD, thresholds, etc.).
 - Inspect the plots: raw/smoothed signals, baseline, and dual‑SD threshold shading (pre‑stimulus green, post‑stimulus red).
 - Select a **label** for the current cell, optionally add **notes**, and **Save label (CSV)**.
+- You can also check **Mark as uncertain** to flag the label as uncertain.
 - Navigate between cells with **← / →** (or the progress panel). You can undo the last change with **U**.
 - **Next** remains disabled until at least one label is saved.
 
@@ -63,8 +64,7 @@ After a successful load, click **Next** to enter the labeling workspace.
 | 2         | Label as High‑oscillatory                   |
 | 3         | Label as Oscillatory                        |
 | 4         | Label as Low‑activity                       |
-| 5         | Label as Uncertain                          |
-| 6         | Label as Drifting                           |
+| 5         | Label as Drifting                           |
 | S         | **Save label (CSV)** for the current cell   |
 | U         | Undo last label change                      |
 | ← / →     | Navigate to previous / next cell            |
@@ -77,7 +77,7 @@ After a successful load, click **Next** to enter the labeling workspace.
 All files are written under the active **session directory**:
 
 - `session.csv` — session metadata (IDs, parameters, timestamps, app version).
-- `labels.csv` — one row per labeled cell: `cell_index, label, notes` (+ timestamps if configured).
+- `labels.csv` — one row per labeled cell: `cell_index, label, notes, uncertain` (+ timestamps if configured).
 - `peaks.csv` — detected peaks per cell (indices, times, amplitudes, per‑cell stats).
 - `cell_map.csv` — mapping from sequential index → external `cell_id`.
 
@@ -102,6 +102,6 @@ All files are written under the active **session directory**:
 ---
 
 ## 7) Labels (default set)
-- **High‑flat**, **High‑oscillatory**, **Oscillatory**, **Low‑activity**, **Uncertain**, **Drifting**
+- **High‑flat**, **High‑oscillatory**, **Oscillatory**, **Low‑activity**, **Drifting**
 
-You can adapt names in code if your taxonomy differs.
+You can adapt names in code if your taxonomy differs. Any label can be flagged as uncertain via the checkbox.

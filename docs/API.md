@@ -1,4 +1,4 @@
-# Data Formats & I/O Contracts (OPCAL‑Labeler v0.4.0)
+# Data Formats & I/O Contracts (OPCAL‑Labeler v0.4.1)
 
 This document defines the on‑disk formats used by **OPCAL‑Labeler** for input traces and session outputs. It is the source of truth for interoperability with downstream analysis and for reproducing annotations.
 
@@ -57,7 +57,7 @@ One row describing the session header. Columns:
 | `annotator_id`  | str    | User‑provided annotator ID                             |
 | `fs_hz`         | float  | Sampling rate (Hz) used in the session                 |
 | `started_utc`   | str    | ISO‑8601 UTC timestamp when the session started        |
-| `app_version`   | str    | App version (e.g., `0.4.0`)                            |
+| `app_version`   | str    | App version (e.g., `0.4.1`)                            |
 | `source_path`   | str    | Original filename uploaded (if any)                    |
 | `source_sha256` | str    | Optional checksum of the source file                   |
 
@@ -80,7 +80,8 @@ One row per **saved** label. Columns:
 | `saved_utc`              | str    | ISO‑8601 UTC timestamp of the save                                                                |
 | `cell_index`             | int    | 0‑based index of the cell                                                                         |
 | `cell_id`                | str    | Cell ID (from `cell_map.csv`)                                                                     |
-| `label`                  | str    | One of: `High-flat`, `High-oscillatory`, `Oscillatory`, `Low-activity`, `Uncertain`, `Drifting`  |
+| `label`                  | str    | One of: `High-flat`, `High-oscillatory`, `Oscillatory`, `Low-activity`, `Drifting`  |
+| `uncertain`              | bool   | True if the label is flagged as uncertain (via checkbox)                                        |
 | `notes`                  | str    | Free‑text notes (may be empty)                                                                    |
 | `filter_type`            | str    | `savgol` or `none`                                                                                |
 | `filter_window`          | int    | Savitzky–Golay window (samples), if used                                                          |
@@ -99,8 +100,8 @@ One row per **saved** label. Columns:
 #### Example (`labels.csv`)
 
 ```csv
-session_id,recording_id,annotator_id,saved_utc,cell_index,cell_id,label,notes,filter_type,filter_window,filter_polyorder,baseline_method,baseline_window_s_or_q,sd_method,threshold_k,mean,std,rms,frac_above_thr,peaks_per_min,version
-20250812_073000_ada,rec_001,ada,2025-08-12T07:31:10+00:00,57,cell_00057,High-oscillatory,"bursts at start",savgol,31,3,rolling_median,20.0,MAD,3.0,0.18,0.07,0.06,0.42,7.3,0.4.0
+session_id,recording_id,annotator_id,saved_utc,cell_index,cell_id,label,uncertain,notes,filter_type,filter_window,filter_polyorder,baseline_method,baseline_window_s_or_q,sd_method,threshold_k,mean,std,rms,frac_above_thr,peaks_per_min,version
+20250812_073000_ada,rec_001,ada,2025-08-12T07:31:10+00:00,57,cell_00057,High-oscillatory,False,"bursts at start",savgol,31,3,rolling_median,20.0,MAD,3.0,0.18,0.07,0.06,0.42,7.3,0.4.1
 ```
 
 ### 2.4 `peaks.csv` (optional but recommended)
@@ -128,8 +129,9 @@ The allowed label values are fixed for consistency:
 - High‑oscillatory
 - Oscillatory
 - Low‑activity
-- Uncertain
 - Drifting
+
+Labels can be flagged as uncertain via the `uncertain` boolean column in `labels.csv`.
 
 ---
 
@@ -141,7 +143,7 @@ The app exposes a UI‑agnostic summary helper in core:
 from opcal_mlt.core.features import summarize_labels
 labels_df, stats_df = summarize_labels(label_map, cell_ids, total_cells=None)
 ```
-- `labels_df`: one row per labeled cell (`cell_index`, `cell_id`, `label`, `notes`).
+- `labels_df`: one row per labeled cell (`cell_index`, `cell_id`, `label`, `uncertain`, `notes`).
 - `stats_df`: per‑class counts and percentages (0–100, 1 decimal place).
 
 ---
@@ -179,3 +181,8 @@ Earlier prototypes supported a JSONL output (one JSON object per cell). The curr
 - Clarified the three ID‑assignment modes in Step 2.
 - Documented optional HDF5 support where applicable.
 - Introduced the core helper `features.summarize_labels` for programmatic summaries.
+
+## 6) Format changes in 0.4.1
+
+- Added a new boolean `uncertain` column to `labels.csv` to flag labels as uncertain via a checkbox.
+- Removed the `Uncertain` label category from the controlled vocabulary; uncertainty is now indicated separately via the `uncertain` column.

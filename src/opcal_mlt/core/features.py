@@ -101,13 +101,14 @@ def summarize_labels(
     Returns
     -------
     labels_df : DataFrame
-        One row per labeled cell: cell_index, cell_id (optional), label, notes.
+        One row per labeled cell: cell_index, cell_id (optional), label, notes, uncertain (if present).
+        The "uncertain" column may be included if present in the label_map.
     stats_df : DataFrame
         Per-class count and percentage (0–100, rounded to 1 decimal place).
     """
     # Empty case
     if not label_map:
-        labels_df = _pd.DataFrame(columns=["cell_index", "cell_id", "label", "notes"])  # empty
+        labels_df = _pd.DataFrame(columns=["cell_index", "cell_id", "label", "notes", "uncertain"])  # empty
         stats_df = _pd.DataFrame(columns=["label", "count", "percent"])
         return labels_df, stats_df
 
@@ -120,6 +121,7 @@ def summarize_labels(
             "cell_id": (cell_ids[ci_int] if (cell_ids is not None and 0 <= ci_int < len(cell_ids)) else None),
             "label": str(meta.get("label", "")),
             "notes": str(meta.get("notes", "")),
+            "uncertain": bool(meta.get("uncertain", False)),
         })
     labels_df = _pd.DataFrame(rows).sort_values("cell_index").reset_index(drop=True)
 

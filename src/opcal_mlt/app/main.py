@@ -52,13 +52,12 @@ s.setdefault("show_smoothed", True)
 
 # === App metadata & constants ===
 APP_NAME = "OPCAL‑Labeler"
-APP_VERSION = "0.4.0"
+APP_VERSION = "0.4.1"
 LABELS = [
     "High-flat",
     "High-oscillatory",
     "Oscillatory",
     "Low-activity",
-    "Uncertain",
     "Drifting",
 ]
 

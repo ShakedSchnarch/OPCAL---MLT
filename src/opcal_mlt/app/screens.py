@@ -130,10 +130,12 @@ def render_finish_export(session_state) -> None:
 
         # Build summary using helper (prefer disk, fallback to memory)
         if labels_df_disk is not None and len(labels_df_disk) > 0:
+            has_unc = "uncertain" in labels_df_disk.columns
             disk_map = {
                 int(r.cell_index): {
                     "label": str(r.label),
                     "notes": ("" if "notes" not in labels_df_disk.columns or _pd.isna(getattr(r, "notes", None)) else str(getattr(r, "notes", ""))),
+                    "uncertain": bool(getattr(r, "uncertain")) if (has_unc and not _pd.isna(getattr(r, "uncertain", None))) else False,
                 }
                 for r in labels_df_disk.itertuples(index=False)
             }
@@ -148,7 +150,7 @@ def render_finish_export(session_state) -> None:
             )
     except Exception:
         import pandas as _pd
-        labels_df = _pd.DataFrame(columns=["cell_index", "cell_id", "label", "notes"])
+        labels_df = _pd.DataFrame(columns=["cell_index", "cell_id", "label", "notes", "uncertain"])
         stats_df  = _pd.DataFrame(columns=["label", "count", "percent"])
 
     if labels_df is not None and len(labels_df) > 0:
@@ -171,7 +173,18 @@ def render_finish_export(session_state) -> None:
             pass
 
         # Detailed per-cell table (kept, under the pie)
-        st.dataframe(labels_df, use_container_width=True)
+        df_display = labels_df.copy()
+        if "uncertain" in df_display.columns:
+            # Present a user-friendly column with checkmarks
+            df_display["Uncertain?"] = df_display["uncertain"].map(lambda v: "✓" if bool(v) else "✗")
+            # Move the friendly column next to 'label' and optionally hide the raw boolean
+            cols = list(df_display.columns)
+            # Ensure a consistent column order: cell_index, cell_id, label, Uncertain?, notes, (uncertain hidden)
+            desired_order = [c for c in ["cell_index", "cell_id", "label", "Uncertain?", "notes"] if c in cols]
+            # Append any remaining columns (excluding the raw 'uncertain' if we already added Uncertain?)
+            remaining = [c for c in cols if c not in desired_order and c != "uncertain"]
+            df_display = df_display[desired_order + remaining]
+        st.dataframe(df_display, use_container_width=True)
     else:
         st.info("No labels saved yet in this session.")
 
@@ -219,17 +232,17 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
     - traces: np.ndarray (T×N) of signals (required)
     - cell_ids: List[str] mapping index→id (required)
     - current_cell / prev_cell: int navigation helpers
-    - label_map: Dict[int, {label, notes}] accumulated labels
+    - label_map: Dict[int, {label, notes, uncertain}] accumulated labels
     - history: List[Tuple[cell_index, previous_label_or_None]] for undo
     - fs_hz, smooth, window, poly, baseline_method, window_s, k, stim_time_s: parameters
     """
-    # Ensure sidebar is visible on entering step 3 and provide floating collapse/reopen buttons
+    # Robust sidebar floating toggle buttons and collapse logic
     components.html(
         """
         <style>
           /* Floating buttons */
           #openSidebarBtn, #collapseSidebarBtn {
-            position: fixed; z-index: 9999; width: 36px; height: 36px; border-radius: 18px;
+            position: fixed; z-index: 2147483647; width: 36px; height: 36px; border-radius: 18px;
             border: 1px solid #ccc; background: #fff; color: #111; box-shadow: 0 2px 6px rgba(0,0,0,.12);
             display: none; align-items: center; justify-content: center; cursor: pointer; user-select: none;
             text-align: center; line-height: 36px;
@@ -242,50 +255,17 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
         <script>
         (function() {
           const doc = window.parent.document;
-          const getSB = () => doc.querySelector('[data-testid="stSidebar"]');
-          if (!getSB()) return;
+          const body = doc.body;
+          const sidebarSel = '[data-testid="stSidebar"]';
+          const getSB = () => doc.querySelector(sidebarSel);
 
-          // --- Helpers to force states explicitly (inline styles) ---
-          function setOpenStyles() {
-            const el = getSB();
-            if (!el) return;
-            el.style.visibility = 'visible';
-            el.style.transform = 'none';
-            el.style.left = '0px';
-            el.style.marginLeft = '0';
-            el.style.width = '320px';
-            el.style.minWidth = '320px';
-            el.style.opacity = '';
-            el.style.pointerEvents = '';
-          }
-          function setCollapsedStyles() {
-            const el = getSB();
-            if (!el) return;
-            // Collapse via inline transform to guarantee effect
-            el.style.transform = 'translateX(-110%)';
-            el.style.opacity = '0';
-            el.style.pointerEvents = 'none';
-          }
-
-          function isCollapsed() {
-            const el = getSB();
-            if (!el) return false;
-            const r = el.getBoundingClientRect();
-            const cs = window.getComputedStyle(el);
-            return (r.width < 100) || (r.left < 0) || (cs.opacity === '0') || (cs.transform && cs.transform !== 'none') || doc.body.classList.contains('sb-collapsed');
-          }
-
-          // Ensure sidebar starts open on entering step 3
-          doc.body.classList.remove('sb-collapsed');
-          setOpenStyles();
-
-          // Create buttons once in the PARENT document
+          // Create buttons immediately (even before sidebar exists)
           let openBtn = doc.getElementById('openSidebarBtn');
           if (!openBtn) {
             openBtn = doc.createElement('div');
             openBtn.id = 'openSidebarBtn';
             openBtn.title = 'Show sidebar';
-            openBtn.innerHTML = '\u00AB\u00AB'; // ««
+            openBtn.innerHTML = '\\u00AB\\u00AB'; // ««
             doc.body.appendChild(openBtn);
           }
           let collapseBtn = doc.getElementById('collapseSidebarBtn');
@@ -293,32 +273,91 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
             collapseBtn = doc.createElement('div');
             collapseBtn.id = 'collapseSidebarBtn';
             collapseBtn.title = 'Hide sidebar';
-            collapseBtn.innerHTML = '\u00BB\u00BB'; // »»
+            collapseBtn.innerHTML = '\\u00BB\\u00BB'; // »»
             doc.body.appendChild(collapseBtn);
           }
 
-          // Wire buttons
-          openBtn.onclick = () => { doc.body.classList.remove('sb-collapsed'); setOpenStyles(); tick(); };
-          collapseBtn.onclick = () => { doc.body.classList.add('sb-collapsed'); setCollapsedStyles(); tick(); };
+          const ensureOpen = () => body.classList.remove('sb-collapsed');
+          const ensureCollapsed = () => body.classList.add('sb-collapsed');
 
-          // If Streamlit exposes a built-in toggle, hook it
-          const builtin = doc.querySelector('[data-testid="stSidebarCollapseButton"], [data-testid="baseButton-toggleSidebar"]');
-          if (builtin) {
-            builtin.addEventListener('click', () => {
-              setTimeout(() => { tick(); }, 50);
-            });
+          // Detect transform/visibility that indicates offscreen even if class isn't set
+          function isSidebarOffscreen() {
+            const sb = getSB();
+            if (!sb) return false;
+            const style = sb.getAttribute('style') || '';
+            if (style.includes('translateX(-') || style.includes('transform: matrix')) return true;
+            const cs = window.getComputedStyle(sb);
+            const rect = sb.getBoundingClientRect();
+            return (cs.transform && cs.transform !== 'none') || rect.right <= 0 || cs.opacity === '0';
+          }
+          function isCollapsed() {
+            return body.classList.contains('sb-collapsed') || isSidebarOffscreen();
+          }
+
+          function forceOpen() {
+            ensureOpen();
+            const sb = getSB();
+            if (sb) {
+              try { sb.style.removeProperty('transform'); } catch(e) {}
+              try { sb.style.removeProperty('opacity'); } catch(e) {}
+              try { sb.style.removeProperty('pointer-events'); } catch(e) {}
+            }
+          }
+          function forceCollapse() {
+            ensureCollapsed();
+            const sb = getSB();
+            if (sb) {
+              sb.style.transform = 'translateX(-110%)';
+              sb.style.opacity = '0';
+              sb.style.pointerEvents = 'none';
+            }
+          }
+
+          // Default intent: open once sidebar is mounted
+          let triedDefaultOpen = false;
+          function tryDefaultOpen() {
+            const sb = getSB();
+            if (sb && !triedDefaultOpen) {
+              triedDefaultOpen = true;
+              // Delay a tick to let Streamlit finish layout before forcing open
+              setTimeout(() => { forceOpen(); tick(); }, 50);
+            }
+          }
+
+          // Button handlers
+          openBtn.onclick = () => { forceOpen(); tick(); };
+          collapseBtn.onclick = () => { forceCollapse(); tick(); };
+
+          // Observer: when sidebar exists, sync with Streamlit's own toggles
+          let mo = null;
+          function ensureObserver() {
+            const sb = getSB();
+            if (sb && !mo) {
+              mo = new MutationObserver(() => {
+                // Keep body class aligned with actual visual state
+                const off = isSidebarOffscreen();
+                if (off) ensureCollapsed(); else ensureOpen();
+                positionCollapseBtn();
+                tick();
+              });
+              mo.observe(sb, { attributes: true, attributeFilter: ['style', 'class'] });
+            }
           }
 
           function positionCollapseBtn() {
-            // Keep collapse button aligned to the sidebar edge
             const el = getSB();
             if (!el) return;
             const r = el.getBoundingClientRect();
-            collapseBtn.style.left = Math.max(14, r.right + 14) + 'px';
+            const cb = doc.getElementById('collapseSidebarBtn');
+            cb.style.left = Math.max(14, r.right + 14) + 'px';
           }
 
           function tick() {
+            tryDefaultOpen();
+            ensureObserver();
             positionCollapseBtn();
+
+            // Show open button whenever the sidebar is collapsed OR offscreen for any reason
             if (isCollapsed()) {
               openBtn.style.display = 'flex';
               collapseBtn.style.display = 'none';
@@ -326,10 +365,14 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
               openBtn.style.display = 'none';
               collapseBtn.style.display = 'flex';
             }
+            openBtn.style.pointerEvents = 'auto';
+            collapseBtn.style.pointerEvents = 'auto';
           }
 
           tick();
-          const poll = setInterval(tick, 400);
+          // Keep syncing on resizes or layout shifts
+          const poll = setInterval(tick, 500);
+          window.addEventListener('resize', tick);
         })();
         </script>
         """,
@@ -450,6 +493,7 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
             existing = s.label_map.get(int(s.current_cell))
             st.session_state["label_value"] = existing["label"] if existing else "Oscillatory"
             st.session_state["notes_value"] = existing["notes"] if existing else ""
+            st.session_state["uncertain_value"] = bool(existing.get("uncertain", False)) if existing else False
             s.prev_cell = s.current_cell
 
         # Progress bar + strip
@@ -531,20 +575,24 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
                     s.label_map.pop(ci, None)
                     st.session_state["label_value"] = "Oscillatory"
                     st.session_state["notes_value"] = ""
+                    st.session_state["uncertain_value"] = False
                 else:
                     s.label_map[ci] = prev
                     st.session_state["label_value"] = prev.get("label", "Oscillatory")
                     st.session_state["notes_value"] = prev.get("notes", "")
+                    st.session_state["uncertain_value"] = bool(prev.get("uncertain", False))
                 logger(f"undo cell_index={ci}")
                 st.success("Undid last save for current/previous cell.")
 
-        label = st.radio("Class", ["High-flat","High-oscillatory","Oscillatory","Low-activity","Uncertain","Drifting"], key="label_value")
+        label = st.radio("Class", ["High-flat","High-oscillatory","Oscillatory","Low-activity","Drifting"], key="label_value")
+        uncertain = st.checkbox("Mark as uncertain", key="uncertain_value", help="Flag this label as uncertain")
         notes = st.text_area("Notes", placeholder="Optional free text", key="notes_value")
 
         if st.button("Save label (CSV)", key="btn_save_label"):
             s.history.append((int(s.current_cell), s.label_map.get(int(s.current_cell))))
             label = st.session_state.get("label_value", "Oscillatory")
             notes = st.session_state.get("notes_value", "")
+            uncertain = bool(st.session_state.get("uncertain_value", False))
             feats = ft.basic_features(x_s, thr, fs_hz, peaks)
             saved_utc = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
             lab_row = {
@@ -555,6 +603,7 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
                 "cell_index": int(s.current_cell),
                 "cell_id": str(s.cell_ids[s.current_cell]),
                 "label": label,
+                "uncertain": uncertain,
                 "notes": notes,
                 "filter_type": "savgol" if smooth else "none",
                 "filter_window": int(window) if smooth else 0,
@@ -582,7 +631,7 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
                 } for p in peaks]
                 append_peaks(Path(s.session_dir), peak_rows)
                 logger(f"save cell_index={int(s.current_cell)} label={label}")
-                s.label_map[int(s.current_cell)] = {"label": label, "notes": notes}
+                s.label_map[int(s.current_cell)] = {"label": label, "notes": notes, "uncertain": uncertain}
                 st.success(f"Saved → {Path(s.session_dir) / 'labels.csv'}")
                 next_unlab = [i for i in range(N) if i not in s.label_map and i > s.current_cell]
                 if next_unlab:
@@ -757,7 +806,15 @@ def render_start_session(*, s):
                     if labels_csv.exists():
                         try:
                             df_lab = pd.read_csv(labels_csv)
-                            s.label_map = {int(r.cell_index): {"label": str(r.label), "notes": str(r.notes) if not pd.isna(r.notes) else ""} for r in df_lab.itertuples(index=False)}
+                            has_unc = "uncertain" in df_lab.columns
+                            s.label_map = {
+                                int(r.cell_index): {
+                                    "label": str(r.label),
+                                    "notes": ("" if pd.isna(getattr(r, "notes", None)) else str(getattr(r, "notes", ""))),
+                                    "uncertain": bool(getattr(r, "uncertain")) if (has_unc and not pd.isna(getattr(r, "uncertain", None))) else False,
+                                }
+                                for r in df_lab.itertuples(index=False)
+                            }
                             loaded = len(s.label_map)
                         except Exception as e:
                             st.error(f"Failed to read labels.csv: {e}")
@@ -828,7 +885,15 @@ def render_start_session(*, s):
                 loaded = 0
                 try:
                     df_lab = pd.read_csv(p / "labels.csv")
-                    s.label_map = {int(r.cell_index): {"label": str(r.label), "notes": ("" if pd.isna(getattr(r, "notes", None)) else str(getattr(r, "notes", "")))} for r in df_lab.itertuples(index=False)}
+                    has_unc = "uncertain" in df_lab.columns
+                    s.label_map = {
+                        int(r.cell_index): {
+                            "label": str(r.label),
+                            "notes": ("" if pd.isna(getattr(r, "notes", None)) else str(getattr(r, "notes", ""))),
+                            "uncertain": bool(getattr(r, "uncertain")) if (has_unc and not pd.isna(getattr(r, "uncertain", None))) else False,
+                        }
+                        for r in df_lab.itertuples(index=False)
+                    }
                     loaded = len(s.label_map)
                 except Exception:
                     # No labels or failed to read; keep empty map

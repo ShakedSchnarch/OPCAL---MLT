@@ -38,6 +38,7 @@ class LabelRecord(BaseModel):
         cell_id (str): Identifier for the cell within the recording.
         fs_hz (float): Sampling frequency in Hz.
         label (LabelName): Assigned label from the controlled vocabulary.
+        uncertain (bool): If True, label is flagged as uncertain. Default: False
         notes (str): Optional notes or comments about the record. Default: ""
         preprocess (PreprocessConfig): Preprocessing configuration applied to the data. Default: PreprocessConfig()
         features (Dict[str, float]): Extracted numeric features for analysis. Default: empty dict
@@ -48,6 +49,7 @@ class LabelRecord(BaseModel):
     cell_id: str
     fs_hz: float
     label: LabelName
+    uncertain: bool = False
     notes: str = ""
     preprocess: PreprocessConfig = PreprocessConfig()
     features: Dict[str, float] = Field(default_factory=dict)

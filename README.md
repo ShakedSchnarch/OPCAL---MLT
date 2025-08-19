@@ -1,4 +1,4 @@
-# OPCAL Manual Labeling Tool (MLT) — v0.4.0
+# OPCAL Manual Labeling Tool (MLT) — v0.4.1
 
 **OPCAL-Labeler** is a professional, cross-platform manual labeling tool designed for calcium imaging traces in neuroscience research. It’s a local Streamlit app focused on accurate, efficient annotation of calcium signals to support downstream analysis.
 
@@ -23,7 +23,7 @@ pip install watchdog
 
 ---
 
-## ✨ Features (v0.4.0)
+## ✨ Features (v0.4.1)
 - **Stepper-only navigation** with clear Step 1 actions (New / Resume / Load by path)
 - **Light theme** polish; consistent headings and layout
 - **Summary-first** finish screen with **pie chart** label distribution + labeled-cells table
@@ -32,7 +32,7 @@ pip install watchdog
 - Load traces (`CSV`, `NPZ`, `HDF5`) and metadata
 - Baseline & robust SD (MAD) calculation; dual-SD threshold visualization (green pre-stimulus / red post)
 - Peak detection via `scipy.signal.find_peaks`
-- One-click / shortcut labeling per cell with per-cell notes
+- One-click / shortcut labeling per cell with per-cell notes and a new **"Mark as uncertain"** checkbox
 - Progress bar and per-session provenance; export of `session.csv`, `labels.csv`, `peaks.csv`, `cell_map.csv`
 
 For detailed usage, see [`USER_GUIDE.md`](USER_GUIDE.md).  
@@ -82,11 +82,12 @@ Each session creates:
 
 ---
 
-## 🆕 What’s New in 0.4.0
+## 🆕 What’s New in 0.4.1
 - Summary-first finish screen with **pie chart** of label distribution
 - Clear Step 1 actions and improved Light theme
 - Disk hydration for resume/summary (`labels.csv`, `cell_map.csv`)
 - Safer Streamlit state usage (no post-widget mutation)
+- New **"Mark as uncertain"** checkbox to flag labels as uncertain (replacing the Uncertain label category)
 
 ---
 
@@ -108,8 +109,8 @@ We welcome contributions!
 ## 🚀 Release / Tagging (maintainers)
 ```bash
 git add -A
-git commit -m "release: OPCAL-Labeler 0.4.0 — summary-first UI, pie chart stats, safer state"
-git tag -a v0.4.0 -m "OPCAL-Labeler 0.4.0"
+git commit -m "release: OPCAL-Labeler 0.4.1 — summary-first UI, pie chart stats, uncertain checkbox, safer state"
+git tag -a v0.4.1 -m "OPCAL-Labeler 0.4.1"
 git push && git push --tags
 ```
 
@@ -118,4 +119,4 @@ git push && git push --tags
 ## 📜 License
 This project is licensed under the [MIT License](LICENSE).
 
----
+---</file>
