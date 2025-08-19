@@ -49,6 +49,217 @@ def _ensure_workspace_state(s) -> bool:
     return True
 
 
+# --- Utility: Diagnostics for session/labels.csv ---
+def _render_session_diagnostics(s) -> None:
+    """Render a small diagnostic caption about the active session directory and labels.csv.
+    Best-effort only; never raises.
+    """
+    try:
+        if not s.get("session_dir"):
+            return
+        import pandas as _pd
+        diag = f"Session dir: `{s.session_dir}`  \n"
+        p = Path(s.session_dir) / "labels.csv"
+        if p.exists():
+            try:
+                _df = _pd.read_csv(p)
+                diag += f"<b>labels.csv</b>: exists, {len(_df)} rows"
+            except Exception:
+                diag += "<b>labels.csv</b>: exists, <span style='color:red;'>could not read</span>"
+        else:
+            diag += "<b>labels.csv</b>: <span style='color:orange;'>not found</span>"
+        st.caption(diag, unsafe_allow_html=True)
+    except Exception:
+        # Swallow any diagnostics issues silently
+        pass
+
+
+# --- Helper: Inject sidebar floating toggle buttons ---
+def _inject_sidebar_toggles() -> None:
+    """Inject floating open/collapse buttons for the Streamlit sidebar.
+    Extracted to reduce noise in the main workspace function. No behavior change.
+    """
+    components.html(
+        """
+        <style>
+          /* Floating buttons */
+          #openSidebarBtn, #collapseSidebarBtn {
+            position: fixed; z-index: 2147483647; width: 36px; height: 36px; border-radius: 18px;
+            border: 1px solid #ccc; background: #fff; color: #111; box-shadow: 0 2px 6px rgba(0,0,0,.12);
+            display: none; align-items: center; justify-content: center; cursor: pointer; user-select: none;
+            text-align: center; line-height: 36px;
+          }
+          #openSidebarBtn:hover, #collapseSidebarBtn:hover { box-shadow: 0 4px 10px rgba(0,0,0,.18); }
+          /* Positions (collapse btn will be adjusted dynamically) */
+          #openSidebarBtn { top: 110px; left: 14px; }
+          #collapseSidebarBtn { top: 110px; left: 334px; }
+        </style>
+        <script>
+        (function() {
+          const doc = window.parent.document;
+          const body = doc.body;
+          const sidebarSel = '[data-testid="stSidebar"]';
+          const getSB = () => doc.querySelector(sidebarSel);
+
+          // Create buttons immediately (even before sidebar exists)
+          let openBtn = doc.getElementById('openSidebarBtn');
+          if (!openBtn) {
+            openBtn = doc.createElement('div');
+            openBtn.id = 'openSidebarBtn';
+            openBtn.title = 'Show sidebar';
+            openBtn.innerHTML = '\\u00AB\\u00AB'; // ««
+            doc.body.appendChild(openBtn);
+          }
+          let collapseBtn = doc.getElementById('collapseSidebarBtn');
+          if (!collapseBtn) {
+            collapseBtn = doc.createElement('div');
+            collapseBtn.id = 'collapseSidebarBtn';
+            collapseBtn.title = 'Hide sidebar';
+            collapseBtn.innerHTML = '\\u00BB\\u00BB'; // »»
+            doc.body.appendChild(collapseBtn);
+          }
+
+          const ensureOpen = () => body.classList.remove('sb-collapsed');
+          const ensureCollapsed = () => body.classList.add('sb-collapsed');
+
+          // Detect transform/visibility that indicates offscreen even if class isn't set
+          function isSidebarOffscreen() {
+            const sb = getSB();
+            if (!sb) return false;
+            const style = sb.getAttribute('style') || '';
+            if (style.includes('translateX(-') || style.includes('transform: matrix')) return true;
+            const cs = window.getComputedStyle(sb);
+            const rect = sb.getBoundingClientRect();
+            return (cs.transform && cs.transform !== 'none') || rect.right <= 0 || cs.opacity === '0';
+          }
+          function isCollapsed() {
+            return body.classList.contains('sb-collapsed') || isSidebarOffscreen();
+          }
+
+          function forceOpen() {
+            ensureOpen();
+            const sb = getSB();
+            if (sb) {
+              try { sb.style.removeProperty('transform'); } catch(e) {}
+              try { sb.style.removeProperty('opacity'); } catch(e) {}
+              try { sb.style.removeProperty('pointer-events'); } catch(e) {}
+            }
+          }
+          function forceCollapse() {
+            ensureCollapsed();
+            const sb = getSB();
+            if (sb) {
+              sb.style.transform = 'translateX(-110%)';
+              sb.style.opacity = '0';
+              sb.style.pointerEvents = 'none';
+            }
+          }
+
+          // Default intent: open once sidebar is mounted
+          let triedDefaultOpen = false;
+          function tryDefaultOpen() {
+            const sb = getSB();
+            if (sb && !triedDefaultOpen) {
+              triedDefaultOpen = true;
+              // Delay a tick to let Streamlit finish layout before forcing open
+              setTimeout(() => { forceOpen(); tick(); }, 50);
+            }
+          }
+
+          // Button handlers
+          openBtn.onclick = () => { forceOpen(); tick(); };
+          collapseBtn.onclick = () => { forceCollapse(); tick(); };
+
+          // Observer: when sidebar exists, sync with Streamlit's own toggles
+          let mo = null;
+          function ensureObserver() {
+            const sb = getSB();
+            if (sb && !mo) {
+              mo = new MutationObserver(() => {
+                // Keep body class aligned with actual visual state
+                const off = isSidebarOffscreen();
+                if (off) ensureCollapsed(); else ensureOpen();
+                positionCollapseBtn();
+                tick();
+              });
+              mo.observe(sb, { attributes: true, attributeFilter: ['style', 'class'] });
+            }
+          }
+
+          function positionCollapseBtn() {
+            const el = getSB();
+            if (!el) return;
+            const r = el.getBoundingClientRect();
+            const cb = doc.getElementById('collapseSidebarBtn');
+            cb.style.left = Math.max(14, r.right + 14) + 'px';
+          }
+
+          function tick() {
+            tryDefaultOpen();
+            ensureObserver();
+            positionCollapseBtn();
+
+            // Show open button whenever the sidebar is collapsed OR offscreen for any reason
+            if (isCollapsed()) {
+              openBtn.style.display = 'flex';
+              collapseBtn.style.display = 'none';
+            } else {
+              openBtn.style.display = 'none';
+              collapseBtn.style.display = 'flex';
+            }
+            openBtn.style.pointerEvents = 'auto';
+            collapseBtn.style.pointerEvents = 'auto';
+          }
+
+          tick();
+          // Keep syncing on resizes or layout shifts
+          const poll = setInterval(tick, 500);
+          window.addEventListener('resize', tick);
+        })();
+        </script>
+        """,
+        height=0,
+    )
+
+
+# --- Hydration helpers for labels and cell_map ---
+def _hydrate_labels_from_csv(sess_path: Path) -> tuple[dict, int]:
+    """Read labels.csv under sess_path and return (label_map, loaded_count).
+    Never raises; returns ({}, 0) on any failure.
+    """
+    try:
+        import pandas as _pd
+        labels_csv = sess_path / "labels.csv"
+        if not labels_csv.exists():
+            return {}, 0
+        df_lab = _pd.read_csv(labels_csv)
+        has_unc = "uncertain" in df_lab.columns
+        label_map = {
+            int(r.cell_index): {
+                "label": str(r.label),
+                "notes": ("" if _pd.isna(getattr(r, "notes", None)) else str(getattr(r, "notes", ""))),
+                "uncertain": bool(getattr(r, "uncertain")) if (has_unc and not _pd.isna(getattr(r, "uncertain", None))) else False,
+            }
+            for r in df_lab.itertuples(index=False)
+        }
+        return label_map, len(label_map)
+    except Exception:
+        return {}, 0
+
+
+def _load_cell_ids_from_map_csv(sess_path: Path) -> list[str] | None:
+    """Return list of cell_ids from cell_map.csv if present and valid; else None."""
+    try:
+        import pandas as _pd
+        map_csv = sess_path / "cell_map.csv"
+        if not map_csv.exists():
+            return None
+        df_map = _pd.read_csv(map_csv).sort_values("cell_index")
+        return [str(x) for x in df_map["cell_id"].tolist()]
+    except Exception:
+        return None
+
+
 
 def _render_sidebar_params(s):
     """Render sidebar parameters and persist values in session state.
@@ -286,19 +497,7 @@ def render_finish_export(session_state) -> None:
         pass
 
     # Diagnostics: help users verify where the app is reading data from.
-    if s.get("session_dir"):
-        import pandas as _pd
-        diag = f"Session dir: `{s.session_dir}`  \n"
-        p = Path(s.session_dir) / "labels.csv"
-        if p.exists():
-            try:
-                _df = _pd.read_csv(p)
-                diag += f"<b>labels.csv</b>: exists, {len(_df)} rows"
-            except Exception:
-                diag += "<b>labels.csv</b>: exists, <span style='color:red;'>could not read</span>"
-        else:
-            diag += "<b>labels.csv</b>: <span style='color:orange;'>not found</span>"
-        st.caption(diag, unsafe_allow_html=True)
+    _render_session_diagnostics(s)
 
     # Summary (first): compute label stats, then visualize as a pie chart.
     st.markdown("---")
@@ -441,147 +640,7 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
     - fs_hz, smooth, window, poly, baseline_method, window_s, k, stim_time_s: parameters
     """
     # Robust sidebar floating toggle buttons and collapse logic
-    components.html(
-        """
-        <style>
-          /* Floating buttons */
-          #openSidebarBtn, #collapseSidebarBtn {
-            position: fixed; z-index: 2147483647; width: 36px; height: 36px; border-radius: 18px;
-            border: 1px solid #ccc; background: #fff; color: #111; box-shadow: 0 2px 6px rgba(0,0,0,.12);
-            display: none; align-items: center; justify-content: center; cursor: pointer; user-select: none;
-            text-align: center; line-height: 36px;
-          }
-          #openSidebarBtn:hover, #collapseSidebarBtn:hover { box-shadow: 0 4px 10px rgba(0,0,0,.18); }
-          /* Positions (collapse btn will be adjusted dynamically) */
-          #openSidebarBtn { top: 110px; left: 14px; }
-          #collapseSidebarBtn { top: 110px; left: 334px; }
-        </style>
-        <script>
-        (function() {
-          const doc = window.parent.document;
-          const body = doc.body;
-          const sidebarSel = '[data-testid="stSidebar"]';
-          const getSB = () => doc.querySelector(sidebarSel);
-
-          // Create buttons immediately (even before sidebar exists)
-          let openBtn = doc.getElementById('openSidebarBtn');
-          if (!openBtn) {
-            openBtn = doc.createElement('div');
-            openBtn.id = 'openSidebarBtn';
-            openBtn.title = 'Show sidebar';
-            openBtn.innerHTML = '\\u00AB\\u00AB'; // ««
-            doc.body.appendChild(openBtn);
-          }
-          let collapseBtn = doc.getElementById('collapseSidebarBtn');
-          if (!collapseBtn) {
-            collapseBtn = doc.createElement('div');
-            collapseBtn.id = 'collapseSidebarBtn';
-            collapseBtn.title = 'Hide sidebar';
-            collapseBtn.innerHTML = '\\u00BB\\u00BB'; // »»
-            doc.body.appendChild(collapseBtn);
-          }
-
-          const ensureOpen = () => body.classList.remove('sb-collapsed');
-          const ensureCollapsed = () => body.classList.add('sb-collapsed');
-
-          // Detect transform/visibility that indicates offscreen even if class isn't set
-          function isSidebarOffscreen() {
-            const sb = getSB();
-            if (!sb) return false;
-            const style = sb.getAttribute('style') || '';
-            if (style.includes('translateX(-') || style.includes('transform: matrix')) return true;
-            const cs = window.getComputedStyle(sb);
-            const rect = sb.getBoundingClientRect();
-            return (cs.transform && cs.transform !== 'none') || rect.right <= 0 || cs.opacity === '0';
-          }
-          function isCollapsed() {
-            return body.classList.contains('sb-collapsed') || isSidebarOffscreen();
-          }
-
-          function forceOpen() {
-            ensureOpen();
-            const sb = getSB();
-            if (sb) {
-              try { sb.style.removeProperty('transform'); } catch(e) {}
-              try { sb.style.removeProperty('opacity'); } catch(e) {}
-              try { sb.style.removeProperty('pointer-events'); } catch(e) {}
-            }
-          }
-          function forceCollapse() {
-            ensureCollapsed();
-            const sb = getSB();
-            if (sb) {
-              sb.style.transform = 'translateX(-110%)';
-              sb.style.opacity = '0';
-              sb.style.pointerEvents = 'none';
-            }
-          }
-
-          // Default intent: open once sidebar is mounted
-          let triedDefaultOpen = false;
-          function tryDefaultOpen() {
-            const sb = getSB();
-            if (sb && !triedDefaultOpen) {
-              triedDefaultOpen = true;
-              // Delay a tick to let Streamlit finish layout before forcing open
-              setTimeout(() => { forceOpen(); tick(); }, 50);
-            }
-          }
-
-          // Button handlers
-          openBtn.onclick = () => { forceOpen(); tick(); };
-          collapseBtn.onclick = () => { forceCollapse(); tick(); };
-
-          // Observer: when sidebar exists, sync with Streamlit's own toggles
-          let mo = null;
-          function ensureObserver() {
-            const sb = getSB();
-            if (sb && !mo) {
-              mo = new MutationObserver(() => {
-                // Keep body class aligned with actual visual state
-                const off = isSidebarOffscreen();
-                if (off) ensureCollapsed(); else ensureOpen();
-                positionCollapseBtn();
-                tick();
-              });
-              mo.observe(sb, { attributes: true, attributeFilter: ['style', 'class'] });
-            }
-          }
-
-          function positionCollapseBtn() {
-            const el = getSB();
-            if (!el) return;
-            const r = el.getBoundingClientRect();
-            const cb = doc.getElementById('collapseSidebarBtn');
-            cb.style.left = Math.max(14, r.right + 14) + 'px';
-          }
-
-          function tick() {
-            tryDefaultOpen();
-            ensureObserver();
-            positionCollapseBtn();
-
-            // Show open button whenever the sidebar is collapsed OR offscreen for any reason
-            if (isCollapsed()) {
-              openBtn.style.display = 'flex';
-              collapseBtn.style.display = 'none';
-            } else {
-              openBtn.style.display = 'none';
-              collapseBtn.style.display = 'flex';
-            }
-            openBtn.style.pointerEvents = 'auto';
-            collapseBtn.style.pointerEvents = 'auto';
-          }
-
-          tick();
-          // Keep syncing on resizes or layout shifts
-          const poll = setInterval(tick, 500);
-          window.addEventListener('resize', tick);
-        })();
-        </script>
-        """,
-        height=0,
-    )
+    _inject_sidebar_toggles()
     if not _ensure_workspace_state(s):
         return
     # Sidebar: processing/labeling parameters
@@ -842,30 +901,13 @@ def render_start_session(*, s):
                     base_root_clean = base_root.strip()
                     s.save_dir = base_root_clean or s.get("save_dir") or default_root
                     # Load existing state (labels + optional cell_map)
-                    labels_csv = p / "labels.csv"
-                    cell_map_csv = p / "cell_map.csv"
                     loaded = 0
-                    if labels_csv.exists():
-                        try:
-                            df_lab = pd.read_csv(labels_csv)
-                            has_unc = "uncertain" in df_lab.columns
-                            s.label_map = {
-                                int(r.cell_index): {
-                                    "label": str(r.label),
-                                    "notes": ("" if pd.isna(getattr(r, "notes", None)) else str(getattr(r, "notes", ""))),
-                                    "uncertain": bool(getattr(r, "uncertain")) if (has_unc and not pd.isna(getattr(r, "uncertain", None))) else False,
-                                }
-                                for r in df_lab.itertuples(index=False)
-                            }
-                            loaded = len(s.label_map)
-                        except Exception as e:
-                            st.error(f"Failed to read labels.csv: {e}")
-                    if cell_map_csv.exists() and not s.get("cell_ids"):
-                        try:
-                            df_map = pd.read_csv(cell_map_csv).sort_values("cell_index")
-                            s.cell_ids = [str(x) for x in df_map["cell_id"].tolist()]
-                        except Exception as e:
-                            st.warning(f"Could not read cell_map.csv: {e}")
+                    label_map_disk, loaded = _hydrate_labels_from_csv(p)
+                    if label_map_disk:
+                        s.label_map = label_map_disk
+                    ids = _load_cell_ids_from_map_csv(p)
+                    if ids and not s.get("cell_ids"):
+                        s.cell_ids = ids
                     st.success(f"Resumed: {p} (loaded {loaded} labeled cells)")
                 except Exception as e:
                     st.error(f"Could not resume: {e}")
