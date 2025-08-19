@@ -68,16 +68,106 @@ def inject_theme_css(palette: dict) -> None:
     .app-title-sub {color: var(--muted); font-size: 1.05rem; text-align:center;}
 
     /* Panels */
-    .block-container > div:first-child {background: var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px 18px;}
-    .top-right-logo {position: absolute; top: 16px; right: 20px; width: 96px; max-width: 20vw;}
-    .hint {margin: 0.25rem 0 0.75rem 0; color: var(--muted); font-size: 0.95rem;}
+    .block-container > div:first-child {background: var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 16px;}
+    .top-right-logo {
+      position: absolute; top: 16px; right: 20px;
+      width: 120px; max-width: 24vw; height: auto;
+      z-index: 9999; pointer-events: none;
+      opacity: .98;
+    }
+    /* Reusable card container */
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+    .hint {margin: 0.25rem 0 0.5rem 0; color: var(--muted); font-size: 0.95rem;}
 
-    .step-header { font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0 0.75rem; }
+    .step-header { font-size: 2rem; font-weight: 800; margin: 0.5rem 0 1rem; }
+    .section-title { font-size: 1.25rem; font-weight: 700; margin: 0.75rem 0 0.5rem; }
+    .subsection-title { font-size: 1.05rem; font-weight: 600; margin: 0.5rem 0 0.25rem; }
+    .stMarkdown p { line-height: 1.45; }
 
     /* Section headings */
     .stHeading h2 {font-size:1.35rem;}
     .stHeading h3 {font-size:1.1rem;}
     .disabled-pane {opacity: .45; pointer-events: none; filter: grayscale(20%);}
+    /* Buttons — consistent academic look */
+    .stButton > button {
+      border-radius: 8px !important;
+      border: 1px solid var(--border) !important;
+      padding: 6px 14px !important;
+      font-weight: 600 !important;
+      letter-spacing: .2px !important;
+      box-shadow: 0 1px 2px rgba(0,0,0,.06) !important;
+    }
+    .stButton > button:hover { box-shadow: 0 2px 6px rgba(0,0,0,.12) !important; }
+
+    /* --- Differentiated button groups (stronger) --- */
+    .btn-nav .stButton > button {
+      background: transparent !important;
+      color: var(--accent) !important;
+      border-color: var(--accent) !important;
+    }
+    .btn-nav .stButton > button:hover {
+      background: rgba(37, 99, 235, .08) !important;
+      box-shadow: 0 2px 6px rgba(0,0,0,.12) !important;
+    }
+    .btn-nav .stButton > button:disabled {
+      opacity: .45 !important;
+      color: var(--muted) !important;
+      border-color: var(--border) !important;
+      background: #fff !important;
+    }
+
+    .btn-action .stButton > button {
+      background: #10b981 !important;     /* emerald-500 */
+      color: #ffffff !important;
+      border-color: #059669 !important;   /* emerald-600 */
+    }
+    .btn-action .stButton > button:hover {
+      background: #059669 !important;     /* emerald-600 */
+      border-color: #047857 !important;   /* emerald-700 */
+      box-shadow: 0 2px 8px rgba(16,185,129,.35) !important;
+    }
+    .btn-action .stButton > button:disabled {
+      background: #a7f3d0 !important;     /* emerald-200 */
+      color: #065f46 !important;          /* emerald-800 */
+      border-color: #6ee7b7 !important;   /* emerald-300 */
+      opacity: .6 !important;
+    }
+
+    .btn-utility .stButton > button {
+      background: #ffffff !important;
+      color: #0f172a !important;
+      border-color: #cbd5e1 !important;   /* slate-300 */
+    }
+    .btn-utility .stButton > button:hover {
+      background: #f1f5f9 !important;     /* slate-100 */
+      border-color: #94a3b8 !important;   /* slate-400 */
+    }
+    .btn-utility .stButton > button:disabled {
+      opacity: .5 !important;
+      background: #f8fafc !important;     /* slate-50 */
+      border-color: #e2e8f0 !important;   /* slate-200 */
+    }
+
+    /* Button size variants */
+    .btn-lg .stButton > button { padding: 10px 18px !important; font-size: 1rem !important; }
+    .btn-sm .stButton > button { padding: 4px 10px !important; font-size: .9rem !important; }
+
+    /* Tighter default gap in columns (helps reduce "holes") */
+    .element-container:has(> div[data-testid="column"]) { margin-bottom: 0.4rem; }
+
+    /* --- Custom progress bar for labeling step --- */
+    .progress-track {
+      width: 100%; height: 10px; background: #e5e7eb; border-radius: 999px; overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .progress-fill {
+      height: 100%; background: var(--accent); transition: width .3s ease;
+    }
     """
 
     st.markdown(f"<style>{css_vars}{css_static}</style>", unsafe_allow_html=True)
@@ -93,7 +183,7 @@ def render_stepper_and_tips(stage: int) -> None:
     st.markdown(
         f"""
         <style>
-        .stepper{{display:flex;gap:12px;margin:8px 0 10px 0;flex-wrap:wrap}}
+        .stepper{{display:flex;gap:12px;margin:8px 0 10px 0;flex-wrap:wrap;justify-content:center}}
         .step{{display:flex;align-items:center;gap:8px;color:var(--muted);}}
         .step .num{{width:22px;height:22px;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:.9rem;}}
         .step.active{{color:var(--text);}}

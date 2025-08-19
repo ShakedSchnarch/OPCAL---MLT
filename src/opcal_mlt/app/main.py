@@ -11,6 +11,7 @@ Signal processing and data utilities live under `opcal_mlt.core` and `opcal_mlt.
 Outputs are CSV‑based (session.csv, labels.csv, peaks.csv, cell_map.csv).
 """
 import streamlit as st
+import base64
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -149,6 +150,18 @@ st.markdown(
 
 inject_theme_css(THEMES[st.session_state.get("theme", "Light")])
 
+# Render top-right logo (prefer no-background version if available), embed as base64 for reliability
+try:
+    nb_logo = assets_dir / "no_background_logo.png"
+    src_path = nb_logo if nb_logo.exists() else _logo_for_icon
+    if src_path.exists():
+        with open(src_path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("ascii")
+            mime = "image/png"
+            st.markdown(f"<img class='top-right-logo' src='data:{mime};base64,{b64}' alt='logo' />", unsafe_allow_html=True)
+except Exception:
+    pass
+
 # === Top stepper (4 stages) ===
 # Do not auto‑advance between screens; only guard illegal entry to Step 3.
 cur = int(s.get("stage", 1))
@@ -224,15 +237,18 @@ if not has_any_labels and s.get("session_dir"):
             pass
 req_ready[3] = has_any_labels
 import streamlit as _st
-c_back, c_sp, c_next = st.columns([1,8,1])
+c_back, c_sp, c_next = st.columns([1,6,1])
 back_disabled = (int(s.stage) <= 1)
 next_disabled = not req_ready.get(int(s.stage), False)
 with c_back:
+    st.markdown('<div class="btn-nav btn-lg">', unsafe_allow_html=True)
     if st.button("Back", key="nav_back", use_container_width=True, disabled=back_disabled):
         s.stage = max(1, int(s.stage) - 1)
         st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 with c_next:
     if int(s.stage) == 4:
+        st.markdown('<div class="btn-nav btn-lg">', unsafe_allow_html=True)
         # At finish: Next starts a new session (reset state except annotator/save_dir)
         if st.button("Start a new session", key="nav_restart", use_container_width=True):
             # Keep annotator, save_dir; reset session-specific keys
@@ -245,10 +261,13 @@ with c_next:
                     del s[k]
             s.stage = 1
             st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
     else:
-        if st.button("Next", key="nav_next", use_container_width=True, disabled=next_disabled):
+        st.markdown('<div class="btn-nav btn-lg">', unsafe_allow_html=True)
+        if st.button("Next", key="nav_next", type="primary", use_container_width=True, disabled=next_disabled):
             s.stage = min(4, int(s.stage) + 1)
             st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # Hint (Step 3): explain why Next is disabled when no labels are saved
 if int(s.stage) == 3 and not has_any_labels:

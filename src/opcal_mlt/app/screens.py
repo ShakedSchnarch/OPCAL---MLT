@@ -193,7 +193,9 @@ def render_finish_export(session_state) -> None:
     st.subheader("Export")
     export_col1, export_col2 = st.columns([1, 2])
     with export_col1:
+        st.markdown('<div class="btn-action btn-lg">', unsafe_allow_html=True)
         do_export = st.button("Export session as ZIP", key="btn_export_zip")
+        st.markdown('</div>', unsafe_allow_html=True)
     with export_col2:
         st.caption("Creates a ZIP archive of the current session folder (labels.csv, peaks.csv, session.csv, cell_map.csv).")
 
@@ -478,10 +480,11 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
     stim_time_s= float(s.get("stim_time_s", 5.0))
 
     T, N = s.traces.shape
-    left, mid, right = st.columns([1, 3, 1], gap="large")
+    left, mid, right = st.columns([3, 8, 3], gap="small")
 
     # -------- Left: navigation & progress --------
     with left:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("Cells")
         if s.get("session_dir"):
             st.caption(f"Session: {s.session_dir}")
@@ -498,7 +501,7 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
 
         # Progress bar + strip
         progress = int((len(s.label_map) / max(1, N)) * 100)
-        st.progress(progress/100)
+        st.markdown(f'<div class="progress-track"><div class="progress-fill" style="width:{progress}%;"></div></div>', unsafe_allow_html=True)
         status = np.zeros(N, dtype=int)
         for ci in s.label_map.keys():
             if 0 <= int(ci) < N:
@@ -509,30 +512,11 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
         ))
         fig_status.update_yaxes(visible=False)
         fig_status.update_xaxes(title_text="Cells", tickmode="auto", nticks=10)
-        fig_status.update_layout(height=120, margin=dict(l=10,r=10,t=10,b=10))
+        fig_status.update_layout(height=90, margin=dict(l=4,r=4,t=4,b=4))
         st.plotly_chart(fig_status, use_container_width=True)
 
-        colJ1, colJ2 = st.columns(2)
-        if colJ1.button("Next unlabeled", key="btn_next_unlabeled"):
-            unlabeled = [i for i in range(N) if i not in s.label_map]
-            if unlabeled:
-                s.current_cell = int(unlabeled[0])
-                st.rerun()
-        if colJ2.button("Prev unlabeled", key="btn_prev_unlabeled"):
-            unlabeled = [i for i in range(N) if i not in s.label_map]
-            if unlabeled:
-                prevs = [u for u in unlabeled if u < s.current_cell]
-                s.current_cell = int(prevs[-1]) if prevs else s.current_cell
-                st.rerun()
-
         st.write(f"Progress: {len(s.label_map)} / {N} labeled")
-        colA, colB = st.columns(2)
-        if colA.button("Prev", key="btn_prev_cell"):
-            s.current_cell = max(0, s.current_cell - 1)
-            st.rerun()
-        if colB.button("Next", key="btn_next_cell"):
-            s.current_cell = min(N-1, s.current_cell + 1)
-            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # Middle: processing & plot
     x = s.traces[:, s.current_cell].astype(float)
@@ -561,33 +545,17 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
         fig.add_trace(go.Scatter(x=t[:stim_idx],  y=thr_pre,  name=f"thr pre ({k}·SD)",  line=dict(width=1)))
         fig.add_trace(go.Scatter(x=t[stim_idx:], y=thr_post, name=f"thr post ({k}·SD)", line=dict(width=1)))
         fig.add_trace(go.Scatter(x=t[peaks], y=x_s[peaks], mode="markers", name="peaks"))
-        fig.update_layout(margin=dict(l=10, r=10, t=40, b=10))
+        fig.update_layout(height=480, margin=dict(l=10, r=10, t=32, b=10))
         st.plotly_chart(fig, use_container_width=True)
 
     # Right: labeling
     with right:
         st.subheader("Label")
-        s.setdefault("history", [])
-        if st.button("Undo last save", key="btn_undo_save"):
-            if s.history:
-                ci, prev = s.history.pop()
-                if prev is None:
-                    s.label_map.pop(ci, None)
-                    st.session_state["label_value"] = "Oscillatory"
-                    st.session_state["notes_value"] = ""
-                    st.session_state["uncertain_value"] = False
-                else:
-                    s.label_map[ci] = prev
-                    st.session_state["label_value"] = prev.get("label", "Oscillatory")
-                    st.session_state["notes_value"] = prev.get("notes", "")
-                    st.session_state["uncertain_value"] = bool(prev.get("uncertain", False))
-                logger(f"undo cell_index={ci}")
-                st.success("Undid last save for current/previous cell.")
-
         label = st.radio("Class", ["High-flat","High-oscillatory","Oscillatory","Low-activity","Drifting"], key="label_value")
         uncertain = st.checkbox("Mark as uncertain", key="uncertain_value", help="Flag this label as uncertain")
         notes = st.text_area("Notes", placeholder="Optional free text", key="notes_value")
 
+        st.markdown('<div class="btn-action btn-lg">', unsafe_allow_html=True)
         if st.button("Save label (CSV)", key="btn_save_label"):
             s.history.append((int(s.current_cell), s.label_map.get(int(s.current_cell))))
             label = st.session_state.get("label_value", "Oscillatory")
@@ -639,6 +607,7 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
                     st.rerun()
             else:
                 st.warning("Start a session (Annotator & Save dir) to save CSVs.")
+        st.markdown('</div>', unsafe_allow_html=True)
 
 from opcal_mlt.app.session_io import make_session_dir, write_session_header, write_cell_map, now_utc_iso
 
