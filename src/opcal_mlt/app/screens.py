@@ -28,6 +28,11 @@ from opcal_mlt.core import features as ft
 
 from opcal_mlt.app.session_io import append_labels, append_peaks
 
+from opcal_mlt.app.ui import apply_plotly_theme
+
+# Fixed display threshold (ΔF/F)
+DFF_FIXED_THRESHOLD: float = 0.2
+
 # --- Helpers ---------------------------------------------------------------
 
 def _ensure_workspace_state(s) -> bool:
@@ -241,6 +246,7 @@ def _render_navigation_and_progress(col, s, N: int, theme: dict) -> None:
         fig_status.update_yaxes(visible=False)
         fig_status.update_xaxes(title_text="Cells", tickmode="auto", nticks=10)
         fig_status.update_layout(height=90, margin=dict(l=4, r=4, t=4, b=4))
+        apply_plotly_theme(fig_status, theme)
         st.plotly_chart(fig_status, use_container_width=True)
 
         st.write(f"Progress: {len(s.label_map)} / {N} labeled")
@@ -264,25 +270,37 @@ def _process_trace_for_cell(s):
 
     x = s.traces[:, s.current_cell].astype(float)
     x_s = pp.smooth_signal(x, window=window, polyorder=poly) if smooth else x
-    base = (
-        pp.baseline_rolling_median(x_s, fs_hz, window_s=window_s)
-        if baseline_method.startswith("rolling")
-        else pp.baseline_percentile(x_s, q=25.0)
-    )
-    sd_mode = "global_pre" if baseline_method.startswith("rolling") else "dual"
-    thr_pre, thr_post, sd_pre, sd_post, stim_idx = pp.dual_sd_thresholds(
-        x_s, base, fs_hz, stim_time_s, k=k, sd_mode=sd_mode
-    )
-    thr = np.concatenate([thr_pre, thr_post])
+
+    # Baseline for display (user choice)
+    if baseline_method.startswith("rolling"):
+        base_display = pp.baseline_rolling_median(x_s, fs_hz, window_s=window_s)
+    else:
+        base_display = pp.baseline_percentile(x_s, q=25.0)
+
+    # Pre-stim index in samples
+    n = int(x_s.size)
+    stim_idx = int(max(0, min(n - 1, round(float(stim_time_s) * float(fs_hz)))))
+
+    # Robust SD from pre-stim residuals relative to the display baseline
+    if stim_idx > 0:
+        sd_const = pp.robust_sd_from_mad(x_s[:stim_idx] - base_display[:stim_idx])
+    else:
+        sd_const = pp.robust_sd_from_mad(x_s - base_display)
+
+    # Threshold vector used for peak detection and features
+    base = base_display
+    thr = base_display + float(k) * float(sd_const)
     peaks = pk.detect_peaks(x_s, thr, fs_hz, min_distance_s=1.0)
     t = np.arange(x.size) / fs_hz
+    # Parameters for floating SD·k rectangles (pre/post), independent of baseline UI
+    y0_pre, y1_pre, y0_post, y1_post, stim_idx_rect = pp.pre_post_sd_rect_params(
+        x_s, fs_hz, stim_time_s, k=k, ref="median"
+    )
 
     return {
         "x": x,
         "x_s": x_s,
         "base": base,
-        "thr_pre": thr_pre,
-        "thr_post": thr_post,
         "thr": thr,
         "peaks": peaks,
         "t": t,
@@ -292,6 +310,11 @@ def _process_trace_for_cell(s):
         "smooth": smooth,
         "show_raw": bool(s.get("show_raw", True)),
         "show_smoothed": bool(s.get("show_smoothed", True)),
+        "sd_const": float(sd_const),
+        "rect_y0_pre": float(y0_pre),
+        "rect_y1_pre": float(y1_pre),
+        "rect_y0_post": float(y0_post),
+        "rect_y1_post": float(y1_post),
     }
 
 
@@ -512,17 +535,34 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
         if data["smooth"] and data["show_smoothed"]:
             fig.add_trace(go.Scatter(x=data["t"], y=data["x_s"], name="smoothed", line=dict(width=2)))
         fig.add_trace(go.Scatter(x=data["t"], y=data["base"], name="baseline", line=dict(width=1, dash="dash")))
-        si = data["stim_idx"]
-        # Bands between baseline and thresholds (pre and post)
-        if si > 0:
-            # Pre-stimulus band
-            fig.add_trace(go.Scatter(x=data["t"][:si], y=data["base"][:si], name="_base_pre", line=dict(width=0), showlegend=False))
-            fig.add_trace(go.Scatter(x=data["t"][:si], y=data["thr_pre"], name=f"thr pre ({data['k']:.1f}·SD)", line=dict(width=1), fill='tonexty'))
-        # Post-stimulus band
-        fig.add_trace(go.Scatter(x=data["t"][si:], y=data["base"][si:], name="_base_post", line=dict(width=0), showlegend=False))
-        fig.add_trace(go.Scatter(x=data["t"][si:], y=data["thr_post"], name=f"thr post ({data['k']:.1f}·SD)", line=dict(width=1), fill='tonexty'))
+        # Fixed ΔF/F threshold line
+        fig.add_trace(go.Scatter(
+            x=data["t"],
+            y=[DFF_FIXED_THRESHOLD] * len(data["t"]),
+            name="ΔF/F = 0.2",
+            line=dict(width=1, dash="dot"),
+        ))
+        # Floating SD·k rectangles (pre and post), independent of dynamic baseline
+        si = int(data["stim_idx"]) if "stim_idx" in data else np.searchsorted(data["t"], s.get("stim_time_s", 0.0))
+        fig.add_shape(
+            type="rect",
+            xref="x", yref="y",
+            x0=float(data["t"][0]), x1=float(data["t"][si if si < len(data["t"]) else -1]),
+            y0=float(data["rect_y0_pre"]), y1=float(data["rect_y1_pre"]),
+            line=dict(width=0), fillcolor=theme.get("shade_pre", "rgba(99,102,241,0.10)"), opacity=1.0,
+            layer="below",
+        )
+        fig.add_shape(
+            type="rect",
+            xref="x", yref="y",
+            x0=float(data["t"][si if si < len(data["t"]) else -1]), x1=float(data["t"][-1]),
+            y0=float(data["rect_y0_post"]), y1=float(data["rect_y1_post"]),
+            line=dict(width=0), fillcolor=theme.get("shade_post", "rgba(16,185,129,0.10)"), opacity=1.0,
+            layer="below",
+        )
         fig.add_trace(go.Scatter(x=data["t"][data["peaks"]], y=data["x_s"][data["peaks"]], mode="markers", name="peaks"))
         fig.update_layout(height=480, margin=dict(l=10, r=10, t=32, b=10))
+        apply_plotly_theme(fig, theme)
         st.plotly_chart(fig, use_container_width=True)
 
     # Right: labeling

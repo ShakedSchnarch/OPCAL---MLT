@@ -1,4 +1,3 @@
-
 """
 Preprocessing utilities for OPCAL‑Labeler.
 
@@ -9,6 +8,9 @@ heavy filtering:
   • Baseline estimation via rolling median or global percentile
   • Robust scale (SD) estimate via MAD (1.4826×MAD)
   • Threshold construction: baseline + k·SD, including dual‑SD (pre/post stimulus)
+
+Usage: the UI calls :func:`pre_post_sd_rect_params` to draw two floating SD·k
+rectangles (0→stim, stim→end) above the trace without binding them to baseline.
 """
 
 from __future__ import annotations
@@ -16,6 +18,11 @@ from __future__ import annotations
 from typing import Tuple
 import numpy as np
 from scipy.signal import savgol_filter
+
+# --- Constants ---------------------------------------------------------------
+MAD_TO_SD: float = 1.4826   # Scale MAD → Gaussian-equivalent SD
+EPS_SD: float = 1e-9        # Tiny positive floor for SD to avoid zero-width bands
+DEFAULT_ROLLING_WINDOW_S: float = 20.0  # Typical rolling-median window (seconds)
 
 
 def smooth_signal(x: np.ndarray, window: int = 31, polyorder: int = 3) -> np.ndarray:
@@ -46,7 +53,7 @@ def smooth_signal(x: np.ndarray, window: int = 31, polyorder: int = 3) -> np.nda
     return savgol_filter(x, window_length=window, polyorder=polyorder, mode="interp")
 
 
-def baseline_rolling_median(x: np.ndarray, fs_hz: float, window_s: float = 20.0) -> np.ndarray:
+def baseline_rolling_median(x: np.ndarray, fs_hz: float, window_s: float = DEFAULT_ROLLING_WINDOW_S) -> np.ndarray:
     """Estimate a slowly varying baseline using a rolling median window.
 
     Parameters
@@ -97,94 +104,85 @@ def baseline_percentile(x: np.ndarray, q: float = 25.0) -> np.ndarray:
 
 
 def robust_sd_from_mad(x: np.ndarray) -> float:
-    """Robust standard‑deviation estimate as 1.4826×MAD with sensible fallbacks.
+    """Estimate a robust SD as ``MAD_TO_SD × median(|x - median(x)|)``.
 
-    Falls back to unbiased std when MAD is degenerate and enforces a tiny
-    positive floor so that k visibly affects thresholds even for flat segments.
+    Falls back to unbiased standard deviation when MAD is degenerate and
+    clamps to a tiny positive floor (``EPS_SD``) so that downstream
+    thresholds are always responsive to *k*.
     """
-
     mad = np.median(np.abs(x - np.median(x)))
-    sd = 1.4826 * mad
+    sd = MAD_TO_SD * mad
     if not np.isfinite(sd) or sd == 0.0:
         sd = float(np.std(x, ddof=1)) if x.size > 1 else 0.0
-    return float(max(sd, 1e-9))
+    return float(max(sd, EPS_SD))
 
 
-def threshold_from_baseline(
+def pre_post_sd_rect_params(
     x: np.ndarray,
-    baseline: np.ndarray | float,
-    k: float = 3.0,
-    sd: float | None = None,
-) -> np.ndarray:
-    """Construct a per‑sample threshold: ``baseline + k·SD``.
-
-    If ``sd`` is not provided, it is estimated robustly from ``x − baseline``.
-    ``baseline`` may be a scalar or an array broadcastable to ``x``.
-    """
-
-    base = np.full_like(x, float(baseline)) if np.isscalar(baseline) else np.asarray(baseline, float)
-    if sd is None:
-        sd = robust_sd_from_mad(x - base)
-    return base + float(k) * float(sd)
-
-
-def dual_sd_thresholds(
-    x: np.ndarray,
-    base: np.ndarray,
     fs_hz: float,
     stim_time_s: float,
     k: float = 3.0,
-    sd_mode: str = "dual",
-) -> Tuple[np.ndarray, np.ndarray, float, float, int]:
-    """Compute separate thresholds for pre‑ and post‑stimulus segments.
+    ref: str = "median",
+) -> Tuple[float, float, float, float, int]:
+    """Compute parameters for two *floating* SD·k rectangles (pre/post stim).
+
+    Visual-only helper that returns constant vertical spans for two rectangles
+    that **do not** attach to the dynamic baseline. For each segment, pick a
+    constant reference level (segment median by default) and compute a robust
+    SD via :func:`robust_sd_from_mad` on residuals relative to that level.
+
+    The returned spans are:
+    - ``[y0_pre,  y1_pre]  = [ref_pre,  ref_pre  + k·SD_pre]``
+    - ``[y0_post, y1_post] = [ref_post, ref_post + k·SD_post]``
 
     Parameters
     ----------
     x : np.ndarray
-        1D signal (T,).
-    base : np.ndarray
-        Baseline (T,) aligned with ``x``.
+        1D signal of shape (T,).
     fs_hz : float
         Sampling rate in Hertz.
     stim_time_s : float
         Time (seconds) at which stimulation starts.
     k : float, default=3.0
-        Threshold multiplier, i.e., ``thr = baseline + k·SD``.
-    sd_mode : str, default="dual"
-        SD computation mode. If "dual", computes separate SDs for pre/post stimulus.
-        If "global_pre", uses the pre‑stimulus SD for the whole trace (sets sd_post = sd_pre).
+        Multiplier applied to the robust SD (band height).
+    ref : {"median", "zero"}, default="median"
+        How to choose the constant reference level per segment.
 
     Returns
     -------
-    (thr_pre, thr_post, sd_pre, sd_post, stim_idx)
-        ``thr_pre`` and ``thr_post`` are threshold arrays for the respective
-        segments; ``sd_pre``/``sd_post`` are the robust SDs used; ``stim_idx`` is
-        the sample index where the split occurs (clipped to [0, T−1]).
+    (y0_pre, y1_pre, y0_post, y1_post, stim_idx)
+        Rectangle base/top values for the pre/post segments and the
+        stimulus index used for splitting.
     """
-
     n = int(x.size)
-    # Convert seconds → sample index and clip to valid range
     stim_idx = int(max(0, min(n - 1, round(float(stim_time_s) * float(fs_hz)))))
 
-    # Compute robust SDs on each segment; fall back sensibly if segments are tiny
-    if stim_idx > 3:
-        sd_pre = robust_sd_from_mad(x[:stim_idx] - base[:stim_idx])
+    # --- Pre segment ---
+    pre = x[:stim_idx] if stim_idx > 0 else x
+    if ref == "zero":
+        ref_pre = 0.0
     else:
-        sd_pre = robust_sd_from_mad(x - base)
-
-    if stim_idx < n - 3:
-        sd_post = robust_sd_from_mad(x[stim_idx:] - base[stim_idx:])
-    else:
-        sd_post = sd_pre
-
-    # Optionally override sd_post with sd_pre if sd_mode is 'global_pre'
-    if str(sd_mode) == "global_pre":
-        sd_post = sd_pre
-
+        ref_pre = float(np.median(pre))
+    sd_pre = robust_sd_from_mad(pre - ref_pre)
     sd_pre = float(max(sd_pre, 1e-9))
-    sd_post = float(max(sd_post, 1e-9))
+    y0_pre = ref_pre
+    y1_pre = ref_pre + float(k) * sd_pre
 
-    thr_pre = base[:stim_idx] + float(k) * sd_pre
-    thr_post = base[stim_idx:] + float(k) * sd_post
+    # --- Post segment ---
+    post = x[stim_idx:] if stim_idx < n else np.empty((0,), dtype=float)
+    if post.size == 0:
+        # Fallback: use pre if post is empty/tiny
+        ref_post = ref_pre
+        sd_post = sd_pre
+    else:
+        if ref == "zero":
+            ref_post = 0.0
+        else:
+            ref_post = float(np.median(post))
+        sd_post = robust_sd_from_mad(post - ref_post)
+        sd_post = float(max(sd_post, 1e-9))
 
-    return thr_pre, thr_post, float(sd_pre), float(sd_post), stim_idx
+    y0_post = ref_post
+    y1_post = ref_post + float(k) * sd_post
+
+    return float(y0_pre), float(y1_pre), float(y0_post), float(y1_post), int(stim_idx)

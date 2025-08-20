@@ -230,6 +230,56 @@ def inject_theme_css(palette: dict) -> None:
 
     st.markdown(f"<style>{css_vars}{css_static}</style>", unsafe_allow_html=True)
 
+# --- Plotly theme helpers -----------------------------------------------------
+
+def resolve_theme(palette: dict | None = None) -> dict:
+    """Return a complete theme/palette dict safe for both CSS and Plotly.
+
+    Accepts a partial dict and fills missing keys from DEFAULT_PALETTE.
+    """
+    return build_palette(palette or {})
+
+
+def default_theme() -> dict:
+    """Convenience accessor for a full default theme."""
+    return build_palette({})
+
+
+def apply_plotly_theme(fig, theme: dict | None = None):
+    """Apply a lightweight Plotly skin aligned with the app theme.
+
+    This avoids using a global Plotly template and instead sets layout fields
+    directly on the figure passed in. Safe to call multiple times.
+    """
+    th = resolve_theme(theme)
+
+    # Backgrounds and base font
+    fig.update_layout(
+        template=None,  # avoid external/global templates overriding our vars
+        paper_bgcolor=th["bg"],
+        plot_bgcolor=th["panel"],
+        font=dict(color=th["text"]),
+        legend=dict(bgcolor=th["panel"], bordercolor=th["border"], borderwidth=1),
+    )
+
+    # Axes styling (gridlines and zero lines)
+    fig.update_xaxes(
+        showline=True,
+        linewidth=1,
+        linecolor=th["border"],
+        gridcolor=th["border"],
+        zerolinecolor=th["border"],
+    )
+    fig.update_yaxes(
+        showline=True,
+        linewidth=1,
+        linecolor=th["border"],
+        gridcolor=th["border"],
+        zerolinecolor=th["border"],
+    )
+
+    return fig
+
 def render_stepper_and_tips(stage: int) -> None:
     labels_steps = [
         "Start session",
