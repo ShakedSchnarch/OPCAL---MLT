@@ -50,6 +50,7 @@ s.setdefault("window", 31)
 s.setdefault("poly", 3)
 s.setdefault("show_raw", True)
 s.setdefault("show_smoothed", True)
+s.setdefault("stim_time_s", 50.0)
 
 
 # === App metadata & constants ===

@@ -1,7 +1,31 @@
 from __future__ import annotations
 import streamlit as st
 
+# --- Default palette and helper ---
+DEFAULT_PALETTE = {
+    "bg": "#f8fafc",            # slate-50
+    "panel": "#ffffff",         # white
+    "border": "#e5e7eb",        # slate-200
+    "text": "#0f172a",          # slate-900
+    "muted": "#64748b",         # slate-500
+    "accent": "#2563eb",        # blue-600
+    # Extras used by screens.py
+    "status_unlabeled": "#e5e7eb",  # slate-200
+    "status_labeled": "#10b981",    # emerald-500
+    # Soft band fills (pre/post) for threshold shading
+    "shade_pre": "rgba(99,102,241,0.10)",   # indigo-500 @ 10%
+    "shade_post": "rgba(16,185,129,0.10)",  # emerald-500 @ 10%
+}
+
+def build_palette(overrides: dict | None = None) -> dict:
+    """Return a complete palette, filling missing keys with defaults."""
+    pal = dict(DEFAULT_PALETTE)
+    if overrides:
+        pal.update({k: v for k, v in overrides.items() if v is not None})
+    return pal
+
 def inject_theme_css(palette: dict) -> None:
+    palette = build_palette(palette)
     # Build CSS in two parts to avoid f-string `{}` parsing problems
     css_vars = f"""
     :root {{
@@ -11,6 +35,10 @@ def inject_theme_css(palette: dict) -> None:
       --text: {palette["text"]};
       --muted: {palette["muted"]};
       --accent: {palette["accent"]};
+      --shade-pre: {palette["shade_pre"]};
+      --shade-post: {palette["shade_post"]};
+      --status-unlabeled: {palette["status_unlabeled"]};
+      --status-labeled: {palette["status_labeled"]};
     }}
     """
 
@@ -25,11 +53,33 @@ def inject_theme_css(palette: dict) -> None:
       width: 320px !important;
       min-width: 320px !important;
     }
-    /* Allow full collapse via body class */
+    /* Force sidebar to be visible (no collapse, no translate) */
+    [data-testid="stSidebar"] {
+      transform: none !important;
+      opacity: 1 !important;
+      pointer-events: auto !important;
+      visibility: visible !important;
+      display: block !important;
+    }
+    /* Hide built-in sidebar collapse/expand chevron */
+    button[aria-label="Toggle sidebar"],
+    button[title="Toggle sidebar"],
+    [data-testid="baseButton-headerNoPadding"][aria-label*="sidebar"],
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapseButton"] {
+      display: none !important;
+    }
+    /* Safety: defeat any upstream body-based collapse states */
+    body[class*="collapsed"], body.sb-collapsed {
+      overflow: auto !important;
+    }
+    body[class*="collapsed"] [data-testid="stSidebar"],
     body.sb-collapsed [data-testid="stSidebar"] {
-      transform: translateX(-110%) !important;
-      opacity: 0 !important;
-      pointer-events: none !important;
+      transform: none !important;
+      opacity: 1 !important;
+      pointer-events: auto !important;
+      visibility: visible !important;
+      display: block !important;
     }
     /* Some Streamlit builds wrap the content in an inner container */
     [data-testid="stSidebar"] section[tabindex="0"] {
@@ -172,6 +222,10 @@ def inject_theme_css(palette: dict) -> None:
     .progress-fill {
       height: 100%; background: var(--accent); transition: width .3s ease;
     }
+
+    /* Optional: CSS hooks for DOM-based shaded bands */
+    .band-pre { background-color: var(--shade-pre); }
+    .band-post { background-color: var(--shade-post); }
     """
 
     st.markdown(f"<style>{css_vars}{css_static}</style>", unsafe_allow_html=True)

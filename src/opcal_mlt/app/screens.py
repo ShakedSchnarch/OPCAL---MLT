@@ -20,7 +20,6 @@ from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
 import plotly.graph_objects as go
 
 from opcal_mlt.core import preprocess as pp
@@ -74,152 +73,6 @@ def _render_session_diagnostics(s) -> None:
         pass
 
 
-# --- Helper: Inject sidebar floating toggle buttons ---
-def _inject_sidebar_toggles() -> None:
-    """Inject floating open/collapse buttons for the Streamlit sidebar.
-    Extracted to reduce noise in the main workspace function. No behavior change.
-    """
-    components.html(
-        """
-        <style>
-          /* Floating buttons */
-          #openSidebarBtn, #collapseSidebarBtn {
-            position: fixed; z-index: 2147483647; width: 36px; height: 36px; border-radius: 18px;
-            border: 1px solid #ccc; background: #fff; color: #111; box-shadow: 0 2px 6px rgba(0,0,0,.12);
-            display: none; align-items: center; justify-content: center; cursor: pointer; user-select: none;
-            text-align: center; line-height: 36px;
-          }
-          #openSidebarBtn:hover, #collapseSidebarBtn:hover { box-shadow: 0 4px 10px rgba(0,0,0,.18); }
-          /* Positions (collapse btn will be adjusted dynamically) */
-          #openSidebarBtn { top: 110px; left: 14px; }
-          #collapseSidebarBtn { top: 110px; left: 334px; }
-        </style>
-        <script>
-        (function() {
-          const doc = window.parent.document;
-          const body = doc.body;
-          const sidebarSel = '[data-testid="stSidebar"]';
-          const getSB = () => doc.querySelector(sidebarSel);
-
-          // Create buttons immediately (even before sidebar exists)
-          let openBtn = doc.getElementById('openSidebarBtn');
-          if (!openBtn) {
-            openBtn = doc.createElement('div');
-            openBtn.id = 'openSidebarBtn';
-            openBtn.title = 'Show sidebar';
-            openBtn.innerHTML = '\\u00AB\\u00AB'; // ««
-            doc.body.appendChild(openBtn);
-          }
-          let collapseBtn = doc.getElementById('collapseSidebarBtn');
-          if (!collapseBtn) {
-            collapseBtn = doc.createElement('div');
-            collapseBtn.id = 'collapseSidebarBtn';
-            collapseBtn.title = 'Hide sidebar';
-            collapseBtn.innerHTML = '\\u00BB\\u00BB'; // »»
-            doc.body.appendChild(collapseBtn);
-          }
-
-          const ensureOpen = () => body.classList.remove('sb-collapsed');
-          const ensureCollapsed = () => body.classList.add('sb-collapsed');
-
-          // Detect transform/visibility that indicates offscreen even if class isn't set
-          function isSidebarOffscreen() {
-            const sb = getSB();
-            if (!sb) return false;
-            const style = sb.getAttribute('style') || '';
-            if (style.includes('translateX(-') || style.includes('transform: matrix')) return true;
-            const cs = window.getComputedStyle(sb);
-            const rect = sb.getBoundingClientRect();
-            return (cs.transform && cs.transform !== 'none') || rect.right <= 0 || cs.opacity === '0';
-          }
-          function isCollapsed() {
-            return body.classList.contains('sb-collapsed') || isSidebarOffscreen();
-          }
-
-          function forceOpen() {
-            ensureOpen();
-            const sb = getSB();
-            if (sb) {
-              try { sb.style.removeProperty('transform'); } catch(e) {}
-              try { sb.style.removeProperty('opacity'); } catch(e) {}
-              try { sb.style.removeProperty('pointer-events'); } catch(e) {}
-            }
-          }
-          function forceCollapse() {
-            ensureCollapsed();
-            const sb = getSB();
-            if (sb) {
-              sb.style.transform = 'translateX(-110%)';
-              sb.style.opacity = '0';
-              sb.style.pointerEvents = 'none';
-            }
-          }
-
-          // Default intent: open once sidebar is mounted
-          let triedDefaultOpen = false;
-          function tryDefaultOpen() {
-            const sb = getSB();
-            if (sb && !triedDefaultOpen) {
-              triedDefaultOpen = true;
-              // Delay a tick to let Streamlit finish layout before forcing open
-              setTimeout(() => { forceOpen(); tick(); }, 50);
-            }
-          }
-
-          // Button handlers
-          openBtn.onclick = () => { forceOpen(); tick(); };
-          collapseBtn.onclick = () => { forceCollapse(); tick(); };
-
-          // Observer: when sidebar exists, sync with Streamlit's own toggles
-          let mo = null;
-          function ensureObserver() {
-            const sb = getSB();
-            if (sb && !mo) {
-              mo = new MutationObserver(() => {
-                // Keep body class aligned with actual visual state
-                const off = isSidebarOffscreen();
-                if (off) ensureCollapsed(); else ensureOpen();
-                positionCollapseBtn();
-                tick();
-              });
-              mo.observe(sb, { attributes: true, attributeFilter: ['style', 'class'] });
-            }
-          }
-
-          function positionCollapseBtn() {
-            const el = getSB();
-            if (!el) return;
-            const r = el.getBoundingClientRect();
-            const cb = doc.getElementById('collapseSidebarBtn');
-            cb.style.left = Math.max(14, r.right + 14) + 'px';
-          }
-
-          function tick() {
-            tryDefaultOpen();
-            ensureObserver();
-            positionCollapseBtn();
-
-            // Show open button whenever the sidebar is collapsed OR offscreen for any reason
-            if (isCollapsed()) {
-              openBtn.style.display = 'flex';
-              collapseBtn.style.display = 'none';
-            } else {
-              openBtn.style.display = 'none';
-              collapseBtn.style.display = 'flex';
-            }
-            openBtn.style.pointerEvents = 'auto';
-            collapseBtn.style.pointerEvents = 'auto';
-          }
-
-          tick();
-          // Keep syncing on resizes or layout shifts
-          const poll = setInterval(tick, 500);
-          window.addEventListener('resize', tick);
-        })();
-        </script>
-        """,
-        height=0,
-    )
 
 
 # --- Hydration helpers for labels and cell_map ---
@@ -275,16 +128,26 @@ def _render_sidebar_params(s):
             format="%.2f",
             help="Default is 1.08 Hz (≈0.93 s/sample)",
         )
-        s.show_raw = st.checkbox(
+        # Manage visibility toggles explicitly in `s` to avoid Streamlit key mutation pitfalls
+        if "show_raw" not in s:
+            s["show_raw"] = True
+        if "show_smoothed" not in s:
+            s["show_smoothed"] = True
+        _show_raw = st.checkbox(
             "Show raw signal",
             value=bool(s.get("show_raw", True)),
             help="Toggle the original unfiltered trace.",
         )
-        s.show_smoothed = st.checkbox(
+        _show_smoothed = st.checkbox(
             "Show smoothed signal",
             value=bool(s.get("show_smoothed", True)),
             help="Toggle the Savitzky–Golay smoothed trace (when smoothing is enabled).",
         )
+        # Persist back to session state if changed
+        if bool(s.get("show_raw", True)) != bool(_show_raw):
+            s["show_raw"] = bool(_show_raw)
+        if bool(s.get("show_smoothed", True)) != bool(_show_smoothed):
+            s["show_smoothed"] = bool(_show_smoothed)
         s.smooth = st.checkbox(
             "Apply Savitzky–Golay smoothing",
             value=bool(s.get("smooth", True)),
@@ -293,8 +156,6 @@ def _render_sidebar_params(s):
                 "Turn off to view the raw signal."
             ),
         )
-        if not s.smooth:
-            s.show_smoothed = False
         if s.smooth:
             _win_default = int(s.get("window", 31))
             if _win_default % 2 == 0:
@@ -330,20 +191,11 @@ def _render_sidebar_params(s):
         s.window_s = st.slider("Rolling median window (s)", 5, 60, int(s.get("window_s", 20)))
         s.k = st.slider("SD threshold k", 1.0, 6.0, float(s.get("k", 3.0)), step=0.5)
 
-        # Stimulus default derived from trace length and fs
-        _fs_guess = float(s.get("fs_hz", 1.08))
-        _T = int(getattr(s.traces, "shape", [0, 0])[0]) if s.get("traces") is not None else 0
-        _dur_s = (_T / _fs_guess) if _fs_guess > 0 else 0.0
-        _stim_default = float(
-            s.get(
-                "stim_time_s",
-                min(max(30.0 / max(_fs_guess, 1e-9), 10.0), max(1.0, 0.4 * _dur_s)),
-            )
-        )
+        # Stimulus default: fixed default of 50.0 seconds for new sessions
         s.stim_time_s = st.number_input(
             "Stimulus time (s)",
             min_value=0.0,
-            value=float(_stim_default),
+            value=float(s.get("stim_time_s", 50.0)),
             step=1.0,
             help=("Time when stimulation starts; used for dual-SD thresholds."),
         )
@@ -358,7 +210,7 @@ def _render_navigation_and_progress(col, s, N: int, theme: dict) -> None:
         st.subheader("Cells")
         if s.get("session_dir"):
             st.caption(f"Session: {s.session_dir}")
-        idx = st.number_input("Cell index", 0, N-1, int(s.current_cell), step=1)
+        idx = st.number_input("Cell index", 0, N-1, int(s.current_cell), step=1, key="cell_index")
         s.current_cell = int(idx)
 
         # When navigating, pre-fill widgets with any existing label for this cell
@@ -417,8 +269,9 @@ def _process_trace_for_cell(s):
         if baseline_method.startswith("rolling")
         else pp.baseline_percentile(x_s, q=25.0)
     )
+    sd_mode = "global_pre" if baseline_method.startswith("rolling") else "dual"
     thr_pre, thr_post, sd_pre, sd_post, stim_idx = pp.dual_sd_thresholds(
-        x_s, base, fs_hz, stim_time_s, k=k
+        x_s, base, fs_hz, stim_time_s, k=k, sd_mode=sd_mode
     )
     thr = np.concatenate([thr_pre, thr_post])
     peaks = pk.detect_peaks(x_s, thr, fs_hz, min_distance_s=1.0)
@@ -639,8 +492,7 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
     - history: List[Tuple[cell_index, previous_label_or_None]] for undo
     - fs_hz, smooth, window, poly, baseline_method, window_s, k, stim_time_s: parameters
     """
-    # Robust sidebar floating toggle buttons and collapse logic
-    _inject_sidebar_toggles()
+    # (Sidebar toggles removed: sidebar is always visible)
     if not _ensure_workspace_state(s):
         return
     # Sidebar: processing/labeling parameters
@@ -661,21 +513,14 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
             fig.add_trace(go.Scatter(x=data["t"], y=data["x_s"], name="smoothed", line=dict(width=2)))
         fig.add_trace(go.Scatter(x=data["t"], y=data["base"], name="baseline", line=dict(width=1, dash="dash")))
         si = data["stim_idx"]
-        if si > 1:
-            fig.add_shape(
-                type="rect",
-                x0=data["t"][0], x1=data["t"][si - 1],
-                y0=data["base"][:si].min(), y1=(data["thr_pre"]).max(),
-                fillcolor=theme["shade_pre"], line=dict(width=0), layer="below",
-            )
-        fig.add_shape(
-            type="rect",
-            x0=data["t"][si], x1=data["t"][-1],
-            y0=data["base"][si:].min(), y1=(data["thr_post"]).max(),
-            fillcolor=theme["shade_post"], line=dict(width=0), layer="below",
-        )
-        fig.add_trace(go.Scatter(x=data["t"][:si],  y=data["thr_pre"],  name=f"thr pre ({data['k']}·SD)",  line=dict(width=1)))
-        fig.add_trace(go.Scatter(x=data["t"][si:], y=data["thr_post"], name=f"thr post ({data['k']}·SD)", line=dict(width=1)))
+        # Bands between baseline and thresholds (pre and post)
+        if si > 0:
+            # Pre-stimulus band
+            fig.add_trace(go.Scatter(x=data["t"][:si], y=data["base"][:si], name="_base_pre", line=dict(width=0), showlegend=False))
+            fig.add_trace(go.Scatter(x=data["t"][:si], y=data["thr_pre"], name=f"thr pre ({data['k']:.1f}·SD)", line=dict(width=1), fill='tonexty'))
+        # Post-stimulus band
+        fig.add_trace(go.Scatter(x=data["t"][si:], y=data["base"][si:], name="_base_post", line=dict(width=0), showlegend=False))
+        fig.add_trace(go.Scatter(x=data["t"][si:], y=data["thr_post"], name=f"thr post ({data['k']:.1f}·SD)", line=dict(width=1), fill='tonexty'))
         fig.add_trace(go.Scatter(x=data["t"][data["peaks"]], y=data["x_s"][data["peaks"]], mode="markers", name="peaks"))
         fig.update_layout(height=480, margin=dict(l=10, r=10, t=32, b=10))
         st.plotly_chart(fig, use_container_width=True)
@@ -1157,30 +1002,3 @@ def render_upload_and_indexing(*, s):
             st.warning("Duplicate cell IDs detected. Consider a different mapping.")
         s.current_cell = 0
         st.success(f"Loaded traces: shape {s.traces.shape}. Mapping ready.")
-
-def render_params(*, s):
-    """
-    (Deprecated) Step 3 — Labeling parameters.
-
-    Kept for internal use or future toggles. The interactive labeling screen now
-    exposes these parameters in the sidebar of the workspace itself.
-    """
-    st.header("Step 3 — Labeling parameters")
-    s.fs_hz = st.number_input(
-        "Sampling rate (Hz)",
-        min_value=0.01,
-        value=float(s.get("fs_hz", 1.08)),
-        step=0.01,
-        format="%.2f",
-        help="Default is 1.08 Hz (≈0.93 s/sample)"
-    )
-    s.smooth = st.checkbox("Apply Savitzky–Golay smoothing", value=bool(s.get("smooth", True)))
-    s.window = st.slider("Smooth window", 5, 101, int(s.get("window", 31)), step=2)
-    s.poly = st.slider("Smooth polyorder", 1, 5, int(s.get("poly", 3)))
-    s.baseline_method = st.selectbox("Baseline method", ["rolling_median", "percentile (25)"], index=0 if str(s.get("baseline_method","rolling_median")).startswith("rolling") else 1)
-    s.window_s = st.slider("Rolling median window (s)", 5, 60, int(s.get("window_s", 20)))
-    s.k = st.slider("SD threshold k", 1.0, 6.0, float(s.get("k", 3.0)), step=0.5)
-    s.stim_time_s = st.number_input("Stimulus time (s)", min_value=0.0, value=float(s.get("stim_time_s", 5.0)), help="Time when stimulation starts; used for dual-SD shading")
-    if st.button("Confirm labeling parameters", key="btn_stage3_confirm"):
-        s.params_confirmed = True
-        st.success("Parameters confirmed. Proceed to labeling.")

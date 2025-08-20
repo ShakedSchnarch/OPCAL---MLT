@@ -97,14 +97,17 @@ def baseline_percentile(x: np.ndarray, q: float = 25.0) -> np.ndarray:
 
 
 def robust_sd_from_mad(x: np.ndarray) -> float:
-    """Robust standard‑deviation estimate as 1.4826×MAD.
+    """Robust standard‑deviation estimate as 1.4826×MAD with sensible fallbacks.
 
-    ``MAD = median(|x − median(x)|)``. The factor 1.4826 scales MAD to the
-    Gaussian SD for large samples.
+    Falls back to unbiased std when MAD is degenerate and enforces a tiny
+    positive floor so that k visibly affects thresholds even for flat segments.
     """
 
     mad = np.median(np.abs(x - np.median(x)))
-    return float(1.4826 * mad)
+    sd = 1.4826 * mad
+    if not np.isfinite(sd) or sd == 0.0:
+        sd = float(np.std(x, ddof=1)) if x.size > 1 else 0.0
+    return float(max(sd, 1e-9))
 
 
 def threshold_from_baseline(
@@ -131,6 +134,7 @@ def dual_sd_thresholds(
     fs_hz: float,
     stim_time_s: float,
     k: float = 3.0,
+    sd_mode: str = "dual",
 ) -> Tuple[np.ndarray, np.ndarray, float, float, int]:
     """Compute separate thresholds for pre‑ and post‑stimulus segments.
 
@@ -146,6 +150,9 @@ def dual_sd_thresholds(
         Time (seconds) at which stimulation starts.
     k : float, default=3.0
         Threshold multiplier, i.e., ``thr = baseline + k·SD``.
+    sd_mode : str, default="dual"
+        SD computation mode. If "dual", computes separate SDs for pre/post stimulus.
+        If "global_pre", uses the pre‑stimulus SD for the whole trace (sets sd_post = sd_pre).
 
     Returns
     -------
@@ -169,6 +176,13 @@ def dual_sd_thresholds(
         sd_post = robust_sd_from_mad(x[stim_idx:] - base[stim_idx:])
     else:
         sd_post = sd_pre
+
+    # Optionally override sd_post with sd_pre if sd_mode is 'global_pre'
+    if str(sd_mode) == "global_pre":
+        sd_post = sd_pre
+
+    sd_pre = float(max(sd_pre, 1e-9))
+    sd_post = float(max(sd_post, 1e-9))
 
     thr_pre = base[:stim_idx] + float(k) * sd_pre
     thr_post = base[stim_idx:] + float(k) * sd_post
