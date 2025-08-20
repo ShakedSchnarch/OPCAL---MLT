@@ -1,3 +1,22 @@
+# Changelog
+
+## [1.0.0] - 2025-08-20
+### Added
+- Initial stable release of OPCAL-MLT.
+- Standardized structure and documentation across all modules.
+- Updated README, USER_GUIDE, and API documentation to reflect new version.
+
+### Changed
+- Refactored `main.py` and `ui.py` for improved readability and consistency.
+- Clarified separation of logic across `screens.py`, `plots.py`, and `components.py`.
+- Improved handling of STD * k rectangles in preprocessing logic (only post-stimulus red rectangle scaled, green remains baseline).
+
+### Fixed
+- Sidebar toggle issues resolved without affecting previous design.
+- Standard deviation scaling bug fixed in preprocessing.
+
+---
+
 ## 0.4.0 - 2025-08-17
 - Summary-first finish screen: **pie chart** of label distribution + labeled-cells table shown **before** export
 - Clear Step 1 actions (New / Resume / Load by path); stepper-only navigation (no auto-advance)

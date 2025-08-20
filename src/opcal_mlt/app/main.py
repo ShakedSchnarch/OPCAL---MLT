@@ -10,27 +10,34 @@ This module orchestrates the UI flow and navigation between four screens:
 Signal processing and data utilities live under `opcal_mlt.core` and `opcal_mlt.app.session_io`.
 Outputs are CSV‑based (session.csv, labels.csv, peaks.csv, cell_map.csv).
 """
-import streamlit as st
-import base64
-import numpy as np
-import pandas as pd
-from pathlib import Path
+
+# === Standard Library Imports ===
 from datetime import datetime, timezone
+from pathlib import Path
+
+# === Third-Party Imports ===
+import streamlit as st
+
+# === Local Imports ===
+from opcal_mlt.app.screens import (
+    render_finish_export,
+    render_labeling_workspace,
+    render_start_session,
+    render_upload_and_indexing,
+)
+from opcal_mlt.app.session_io import (
+    append_labels,
+    append_peaks,
+    make_session_dir,
+    now_utc_iso,
+    write_cell_map,
+    write_session_header,
+)
 from opcal_mlt.app.ui import inject_theme_css, render_stepper_and_tips
-from opcal_mlt.app.screens import render_labeling_workspace, render_finish_export, render_start_session, render_upload_and_indexing
-try:
-    # New name (preferred)
-    from opcal_mlt.core.schemas import PreprocessConfig
-except ImportError:  # Backward-compatibility with older versions
-    from opcal_mlt.core.schemas import PreprocessSettings as PreprocessConfig
-from opcal_mlt.app.session_io import make_session_dir, write_session_header, write_cell_map, append_labels, append_peaks, now_utc_iso
+
+# === Session State Initialization ===
 s = st.session_state
-# Hard guards (in addition to setdefault below)
-if "label_map" not in s or not isinstance(s.get("label_map"), dict):
-    s["label_map"] = {}
-if "current_cell" not in s:
-    s["current_cell"] = 0
-# Ensure annotator/save_dir always present for navigation logic
+# Use setdefault only (remove hard guards)
 s.setdefault("annotator", "")
 s.setdefault("save_dir", "")
 s.setdefault("stage", 1)               # 1=Start, 2=Upload, 3=Label, 4=Finish
@@ -43,7 +50,6 @@ s.setdefault("traces", None)
 s.setdefault("cell_ids", None)
 s.setdefault("session_dir", "")
 s.setdefault("history", [])
-
 s.setdefault("fs_hz", 1.08)
 s.setdefault("smooth", True)
 s.setdefault("window", 31)
@@ -51,11 +57,11 @@ s.setdefault("poly", 3)
 s.setdefault("show_raw", True)
 s.setdefault("show_smoothed", True)
 s.setdefault("stim_time_s", 50.0)
+s.setdefault("theme", "Light")  # Ensure theme is always set
 
-
-# === App metadata & constants ===
+# === App Metadata & Constants ===
 APP_NAME = "OPCAL‑Labeler"
-APP_VERSION = "0.4.1"
+APP_VERSION = "1.0.0-rc1"
 LABELS = [
     "High-flat",
     "High-oscillatory",
@@ -100,6 +106,7 @@ THEMES = {
     },
 }
 
+# === Logging Utility ===
 def _log(msg: str):
     """Append a UTC‑timestamped message to the active session's log file (if any)."""
     try:
@@ -113,7 +120,7 @@ def _log(msg: str):
     except Exception:
         pass
 
-# Resolve page icon (favicon): prefer assets/favicon.png; otherwise derive from logo.png (if PIL is available)
+# === Page Icon (favicon/logo) Resolution ===
 assets_dir = Path(__file__).parent / "assets"
 _favicon_path = assets_dir / "favicon.png"
 _logo_for_icon = assets_dir / "logo.png"
@@ -126,7 +133,7 @@ try:
 except Exception:
     _page_icon_obj = None
 
-
+# === Streamlit Page Config ===
 st.set_page_config(
     page_title=APP_NAME,
     layout="wide",
@@ -138,8 +145,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Header + theme injection
-
+# === Header + Theme Injection ===
 st.markdown(
     f"""
     <div class="app-title">
@@ -149,12 +155,9 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
 inject_theme_css(THEMES[st.session_state.get("theme", "Light")])
 
-
-# === Top stepper (4 stages) ===
-# Do not auto‑advance between screens; only guard illegal entry to Step 3.
+# === Top Stepper (4 Stages) ===
 cur = int(s.get("stage", 1))
 if cur == 3 and (s.get("traces") is None or s.get("cell_ids") is None):
     # If user jumped to labeling without data, send back to Upload
@@ -165,10 +168,9 @@ else:
 current_step = int(s.stage)
 render_stepper_and_tips(current_step)
 
-# === Create session folder (once traces + metadata exist) ===
+# === Create Session Folder (once traces + metadata exist) ===
 if s.get("annotator") and s.get("save_dir") and (s.get("traces") is not None) and not s.get("session_dir"):
     base_dir = Path(s.save_dir)
-    # Recording ID: prefer provided value; fall back to a time‑based identifier.
     rec_id = s.get("recording_id") or f"rec_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     s.session_dir = make_session_dir(base_dir, rec_id, s.annotator)
     write_session_header(
@@ -190,21 +192,24 @@ if s.get("annotator") and s.get("save_dir") and (s.get("traces") is not None) an
         )
     _log(f"session_start annotator={s.annotator} recording_id={rec_id}")
 
-# === Stage router (render a single screen) ===
-if s.stage == 1:
-    render_start_session(s=s)
-elif s.stage == 2:
-    render_upload_and_indexing(s=s)
-elif s.stage == 3:
-    theme = THEMES[st.session_state.get("theme", "Light")]
-    render_labeling_workspace(s=s, theme=theme, logger=_log)
-elif s.stage == 4:
-    render_finish_export(st.session_state)
-else:
-    st.info("Follow the steps above to begin.")
+# === Stage Router (render a single screen) ===
+def _route_stage():
+    """Render the appropriate screen for the current stage."""
+    if s.stage == 1:
+        render_start_session(s=s)
+    elif s.stage == 2:
+        render_upload_and_indexing(s=s)
+    elif s.stage == 3:
+        theme = THEMES[st.session_state.get("theme", "Light")]
+        render_labeling_workspace(s=s, theme=theme, logger=_log)
+    elif s.stage == 4:
+        render_finish_export(st.session_state)
+    else:
+        st.info("Follow the steps above to begin.")
 
+_route_stage()
 
-# === Bottom navigation (Back / Next) ===
+# === Bottom Navigation (Back / Next) ===
 st.markdown("---")
 req_ready = {
     1: bool(s.get("annotator") and s.get("save_dir")),
@@ -216,7 +221,8 @@ req_ready = {
 # Guard for Step 3 → 4: require at least one saved label (memory or labels.csv)
 has_any_labels = bool(st.session_state.get("label_map"))
 if not has_any_labels and s.get("session_dir"):
-    # Try disk labels.csv
+    # NOTE: This reloads labels.csv on every render until a label is found.
+    #       Consider optimizing to avoid repeated disk reads.
     labels_csv_path = Path(s.session_dir) / "labels.csv"
     if labels_csv_path.exists():
         try:
@@ -227,22 +233,23 @@ if not has_any_labels and s.get("session_dir"):
         except Exception:
             pass
 req_ready[3] = has_any_labels
-import streamlit as _st
-c_back, c_sp, c_next = st.columns([1,6,1])
+
+c_back, c_sp, c_next = st.columns([1, 6, 1])
 back_disabled = (int(s.stage) <= 1)
 next_disabled = not req_ready.get(int(s.stage), False)
+
 with c_back:
     st.markdown('<div class="btn-nav btn-lg">', unsafe_allow_html=True)
     if st.button("Back", key="nav_back", use_container_width=True, disabled=back_disabled):
         s.stage = max(1, int(s.stage) - 1)
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
+
 with c_next:
     if int(s.stage) == 4:
         st.markdown('<div class="btn-nav btn-lg">', unsafe_allow_html=True)
         # At finish: Next starts a new session (reset state except annotator/save_dir)
         if st.button("Start a new session", key="nav_restart", use_container_width=True):
-            # Keep annotator, save_dir; reset session-specific keys
             keep_keys = {"annotator", "save_dir"}
             for k in [
                 "session_dir", "traces", "cell_ids", "recording_id", "label_map",
@@ -265,4 +272,7 @@ if int(s.stage) == 3 and not has_any_labels:
     st.caption("Save at least one label to proceed to Finish & export.")
 
 # === Footer ===
-st.markdown(f"<div class='small-muted'>OPCAL‑Labeler v{APP_VERSION} • Local labeling tool • MIT/BSD‑style license. No telemetry. Data stays local.</div>", unsafe_allow_html=True)
+st.markdown(
+    f"<div class='small-muted'>OPCAL‑Labeler v{APP_VERSION} • Local labeling tool • MIT/BSD‑style license. No telemetry. Data stays local.</div>",
+    unsafe_allow_html=True,
+)

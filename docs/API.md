@@ -1,4 +1,4 @@
-# Data Formats & I/O Contracts (OPCAL‑Labeler v0.4.1)
+# Data Formats & I/O Contracts (OPCAL‑Labeler v1.0.0)
 
 This document defines the on‑disk formats used by **OPCAL‑Labeler** for input traces and session outputs. It is the source of truth for interoperability with downstream analysis and for reproducing annotations.
 
@@ -57,7 +57,7 @@ One row describing the session header. Columns:
 | `annotator_id`  | str    | User‑provided annotator ID                             |
 | `fs_hz`         | float  | Sampling rate (Hz) used in the session                 |
 | `started_utc`   | str    | ISO‑8601 UTC timestamp when the session started        |
-| `app_version`   | str    | App version (e.g., `0.4.1`)                            |
+| `app_version`   | str    | App version (e.g., `1.0.0`)                            |
 | `source_path`   | str    | Original filename uploaded (if any)                    |
 | `source_sha256` | str    | Optional checksum of the source file                   |
 
@@ -101,7 +101,7 @@ One row per **saved** label. Columns:
 
 ```csv
 session_id,recording_id,annotator_id,saved_utc,cell_index,cell_id,label,uncertain,notes,filter_type,filter_window,filter_polyorder,baseline_method,baseline_window_s_or_q,sd_method,threshold_k,mean,std,rms,frac_above_thr,peaks_per_min,version
-20250812_073000_ada,rec_001,ada,2025-08-12T07:31:10+00:00,57,cell_00057,High-oscillatory,False,"bursts at start",savgol,31,3,rolling_median,20.0,MAD,3.0,0.18,0.07,0.06,0.42,7.3,0.4.1
+20250812_073000_ada,rec_001,ada,2025-08-12T07:31:10+00:00,57,cell_00057,High-oscillatory,False,"bursts at start",savgol,31,3,rolling_median,20.0,MAD,3.0,0.18,0.07,0.06,0.42,7.3,1.0.0
 ```
 
 ### 2.4 `peaks.csv` (optional but recommended)
@@ -186,3 +186,10 @@ Earlier prototypes supported a JSONL output (one JSON object per cell). The curr
 
 - Added a new boolean `uncertain` column to `labels.csv` to flag labels as uncertain via a checkbox.
 - Removed the `Uncertain` label category from the controlled vocabulary; uncertainty is now indicated separately via the `uncertain` column.
+
+## 7) Format changes in 1.0.0
+
+- **No schema changes** to on‑disk CSVs (`session.csv`, `cell_map.csv`, `labels.csv`, `peaks.csv`).
+- Clarified the visual policy for STD rectangles in the UI (pre‑stimulus band uses **k = 1**, post‑stimulus band uses **k**). This is a **visual aid only** and does not change any saved values.
+- Router/dispatch refactors in the app do not affect I/O formats.
+- Examples updated to show `app_version = 1.0.0`.
