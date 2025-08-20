@@ -2,8 +2,7 @@
 
 A lightweight Streamlit application for manual labeling of calcium imaging traces (ΔF/F) with baseline and stimulus‑aligned utilities.
 ![alt text](image.png)
-> **Version:** preparing for **v1.0.0** (current package tag: `0.4.0`)
-
+> **Version:** **v1.0.0**
 ---
 
 ## Table of contents
