@@ -132,8 +132,8 @@ def pre_post_sd_rect_params(
     SD via :func:`robust_sd_from_mad` on residuals relative to that level.
 
     The returned spans are:
-    - ``[y0_pre,  y1_pre]  = [ref_pre,  ref_pre  + k·SD_pre]``
-    - ``[y0_post, y1_post] = [ref_post, ref_post + k·SD_post]``
+    - ``[y0_pre,  y1_pre]  = [ref_pre,  ref_pre  + SD_pre]``  (pre **does not** use *k*)
+    - ``[y0_post, y1_post] = [ref_post, ref_post + k·SD_post]``  (post uses *k*)
 
     Parameters
     ----------
@@ -144,7 +144,7 @@ def pre_post_sd_rect_params(
     stim_time_s : float
         Time (seconds) at which stimulation starts.
     k : float, default=3.0
-        Multiplier applied to the robust SD (band height).
+        Multiplier applied **only to the post‑stimulus** robust SD (band height). The pre‑stimulus band uses k = 1.
     ref : {"median", "zero"}, default="median"
         How to choose the constant reference level per segment.
 
@@ -166,7 +166,7 @@ def pre_post_sd_rect_params(
     sd_pre = robust_sd_from_mad(pre - ref_pre)
     sd_pre = float(max(sd_pre, 1e-9))
     y0_pre = ref_pre
-    y1_pre = ref_pre + float(k) * sd_pre
+    y1_pre = ref_pre + sd_pre
 
     # --- Post segment ---
     post = x[stim_idx:] if stim_idx < n else np.empty((0,), dtype=float)

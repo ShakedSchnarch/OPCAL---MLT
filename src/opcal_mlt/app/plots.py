@@ -11,6 +11,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 from opcal_mlt.app.ui import apply_plotly_theme
+from opcal_mlt.core.preprocess import robust_sd_from_mad
 
 
 def make_workspace_figure(
@@ -73,22 +74,42 @@ def make_workspace_figure(
     si = max(0, min(int(si), len(t) - 1))
 
     if all(k in data for k in ("rect_y0_pre", "rect_y1_pre", "rect_y0_post", "rect_y1_post")):
+        # Backward‑compatible path: use provided rectangle params as‑is
         y0_pre = float(data["rect_y0_pre"]); y1_pre = float(data["rect_y1_pre"]) 
         y0_post = float(data["rect_y0_post"]); y1_post = float(data["rect_y1_post"]) 
-        if y1_pre > y0_pre and len(t) >= 2 and si >= 0:
-            fig.add_shape(
-                type="rect", xref="x", yref="y",
-                x0=float(t[0]), x1=float(t[si]), y0=y0_pre, y1=y1_pre,
-                line=dict(width=0), fillcolor=theme.get("shade_pre", "rgba(99,102,241,0.10)"),
-                opacity=1.0, layer="below",
-            )
-        if y1_post > y0_post and len(t) >= 2 and si < len(t):
-            fig.add_shape(
-                type="rect", xref="x", yref="y",
-                x0=float(t[si]), x1=float(t[-1]), y0=y0_post, y1=y1_post,
-                line=dict(width=0), fillcolor=theme.get("shade_post", "rgba(16,185,129,0.10)"),
-                opacity=1.0, layer="below",
-            )
+    else:
+        # Fallback path: compute spans from the data (pre uses k=1; post uses k)
+        x_s = np.asarray(data.get("x_s", data.get("x", [])), dtype=float)
+        base = np.asarray(data.get("base", np.zeros_like(x_s)), dtype=float)
+        k_val = float(data.get("k", 3.0))
+
+        pre = x_s[:si] - base[:si]
+        post = x_s[si:] - base[si:]
+
+        # Reference levels (medians of baseline segments)
+        ref_pre = float(np.median(base[:si])) if si > 0 else 0.0
+        ref_post = float(np.median(base[si:])) if si < len(base) else (float(base[-1]) if len(base) else 0.0)
+
+        sd_pre = float(robust_sd_from_mad(pre)) if pre.size else 0.0
+        sd_post = float(robust_sd_from_mad(post)) if post.size else 0.0
+
+        y0_pre,  y1_pre  = ref_pre,  ref_pre  + sd_pre              # k = 1 for pre
+        y0_post, y1_post = ref_post, ref_post + k_val * sd_post     # k for post
+
+    if y1_pre > y0_pre and len(t) >= 2 and si >= 0:
+        fig.add_shape(
+            type="rect", xref="x", yref="y",
+            x0=float(t[0]), x1=float(t[si]), y0=y0_pre, y1=y1_pre,
+            line=dict(width=0), fillcolor=theme.get("shade_pre", "rgba(99,102,241,0.10)"),
+            opacity=1.0, layer="below",
+        )
+    if y1_post > y0_post and len(t) >= 2 and si < len(t):
+        fig.add_shape(
+            type="rect", xref="x", yref="y",
+            x0=float(t[si]), x1=float(t[-1]), y0=y0_post, y1=y1_post,
+            line=dict(width=0), fillcolor=theme.get("shade_post", "rgba(16,185,129,0.10)"),
+            opacity=1.0, layer="below",
+        )
 
     # Peaks
     peaks = data.get("peaks")

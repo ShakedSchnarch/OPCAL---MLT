@@ -13,8 +13,8 @@ DEFAULT_PALETTE = {
     "status_unlabeled": "#e5e7eb",  # slate-200
     "status_labeled": "#10b981",    # emerald-500
     # Soft band fills (pre/post) for threshold shading
-    "shade_pre": "rgba(99,102,241,0.10)",   # indigo-500 @ 10%
-    "shade_post": "rgba(16,185,129,0.10)",  # emerald-500 @ 10%
+    "shade_pre": "rgba(16,185,129,0.10)",   # emerald-500 @ 10%
+    "shade_post": "rgba(239,68,68,0.12)",  # red-500 @ 12%
 }
 
 def build_palette(overrides: dict | None = None) -> dict:

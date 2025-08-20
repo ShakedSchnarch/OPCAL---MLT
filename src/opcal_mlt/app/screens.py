@@ -286,6 +286,11 @@ def render_labeling_workspace(*, s, theme: dict, logger) -> None:
 
     # Middle: processing & plot
     data = process_trace_for_cell(s)
+    # Backward-compat guards for updated STD-rectangle logic
+    # Ensure downstream plotting has the required keys even if older state lacks them
+    if isinstance(data, dict):
+        data.setdefault("k", float(s.get("k", 3.0)))
+        data.setdefault("stim_time_s", float(s.get("stim_time_s", 0.0)))
     with mid:
         st.markdown(f"### Cell <code>{s.cell_ids[s.current_cell]}</code>", unsafe_allow_html=True)
         from opcal_mlt.app.plots import make_workspace_figure
