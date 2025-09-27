@@ -7,7 +7,7 @@ src/opcal_mlt/
 │   ├── routing.py          # Stage router
 │   ├── state.py            # Streamlit session_state adapter
 │   ├── theme.py            # Shared light/dark palettes
-│   ├── pages/              # Individual screens (start, ingest, workspace, export)
+│   ├── views/              # Individual screens (start, ingest, workspace, export)
 │   └── components/         # Reusable UI pieces (navigation, diagnostics, forms)
 ├── domain/
 │   ├── enums.py            # Stage/label/baseline enumerations
@@ -30,17 +30,14 @@ src/opcal_mlt/
 
 ## Testing Strategy
 - `tests/unit/`
-  - `test_domain_*` — validate dataclasses/enums behave as expected.
-  - `test_services_*` — cover session, ingest, labeling, export services using tmp paths.
-  - `test_app_state.py` — exercise the StateAdapter conversions.
-- `tests/integration/`
-  - `test_flow_labeling.py` — end-to-end flow across services (start → ingest → label → export).
-  - `test_export_zip.py` — ensure archive contains expected files.
-- Future optional UI smoke tests via `streamlit.testing` once pages are fully migrated.
+  - `test_domain_models.py` — validates dataclasses/enums.
+  - `test_session_service.py` — start/resume/hydration flows using tmp paths.
+  - `test_ingest_service.py` — CSV/NPZ loading + ID assignment.
+- Future optional suites: service-level integration tests (session → export) and Streamlit smoke tests using `streamlit.testing`.
 
 ## Migration Checklist
 1. Introduce domain + services layers (this branch).
 2. Move session hydration/export logic from `app/screens.py` into services.
-3. Split `screens.py` into dedicated `app/pages/*` modules using the router.
+3. Split `screens.py` into dedicated `app/views/*` modules using the router.
 4. Replace direct `st.session_state` access with `StateAdapter` in pages.
 5. Delete legacy helpers once coverage confirms parity, update documentation.

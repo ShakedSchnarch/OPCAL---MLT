@@ -7,10 +7,10 @@ from typing import Dict
 
 import streamlit as st
 
-from opcal_mlt.app.pages import export as page_export
-from opcal_mlt.app.pages import ingest as page_ingest
-from opcal_mlt.app.pages import start as page_start
-from opcal_mlt.app.pages import workspace as page_workspace
+from opcal_mlt.app.views import export as page_export
+from opcal_mlt.app.views import ingest as page_ingest
+from opcal_mlt.app.views import start as page_start
+from opcal_mlt.app.views import workspace as page_workspace
 from opcal_mlt.app.routing import Router
 from opcal_mlt.app.session_io import write_cell_map
 from opcal_mlt.app.state import StateAdapter
@@ -186,7 +186,7 @@ def _render_navigation(state: StateAdapter, session_service: SessionService) -> 
         if st.button("Back", key="nav_back", use_container_width=True, disabled=(idx <= 0)):
             prev_stage = STAGE_FLOW[max(0, idx - 1)]
             state.set_stage(prev_stage)
-            st.experimental_rerun()
+            st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_next:
@@ -194,13 +194,13 @@ def _render_navigation(state: StateAdapter, session_service: SessionService) -> 
         if stage == Stage.EXPORT:
             if st.button("Start a new session", key="nav_restart", use_container_width=True):
                 _reset_for_new_session(state)
-                st.experimental_rerun()
+                st.rerun()
         else:
             disabled = not bool(readiness.get(stage, False))
             if st.button("Next", key="nav_next", type="primary", use_container_width=True, disabled=disabled):
                 next_stage = STAGE_FLOW[min(len(STAGE_FLOW) - 1, idx + 1)]
                 state.set_stage(next_stage)
-                st.experimental_rerun()
+                st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
     if stage == Stage.WORKSPACE and not has_labels:

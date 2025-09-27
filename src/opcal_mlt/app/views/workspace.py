@@ -165,8 +165,11 @@ def _handle_save_label(
     logger(f"save cell_index={int(s.current_cell)} label={label_enum.value}")
     st.success(f"Saved → {Path(session_dir) / 'labels.csv'}")
 
-    next_unlabeled = [idx for idx in range(trace_set.traces.shape[1]) if idx not in state.get_label_map() and idx > int(s.current_cell)]
+    next_unlabeled = [
+        idx
+        for idx in range(trace_set.traces.shape[1])
+        if idx not in state.get_label_map() and idx > int(s.current_cell)
+    ]
     if next_unlabeled:
         s.current_cell = int(next_unlabeled[0])
-        st.experimental_rerun()
-*** End Patch
+        st.rerun()
