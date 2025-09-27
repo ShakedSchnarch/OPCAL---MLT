@@ -1,7 +1,7 @@
 """Plot builders for OPCAL‑Labeler.
 
-This module centralizes Plotly figure creation so `screens.py` stays focused on
-UI control flow. Functions here are side‑effect free: they build and return
+This module centralizes Plotly figure creation so Streamlit pages stay focused on
+UI control flow. Functions here are side-effect free: they build and return
 figures without touching Streamlit state.
 """
 from __future__ import annotations

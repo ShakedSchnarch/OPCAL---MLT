@@ -142,7 +142,7 @@ def _handle_save_label(
     previous_entry = s.label_map.get(int(s.current_cell)) if isinstance(getattr(s, "label_map", {}), dict) else None
 
     try:
-        _result = labeling_service.save_label(
+        labeling_service.save_label(
             session_dir=Path(session_dir),
             trace_set=trace_set,
             cell_index=int(s.current_cell),

@@ -9,7 +9,7 @@ DEFAULT_PALETTE = {
     "text": "#0f172a",          # slate-900
     "muted": "#64748b",         # slate-500
     "accent": "#2563eb",        # blue-600
-    # Extras used by screens.py
+    # Extras used by Streamlit pages
     "status_unlabeled": "#e5e7eb",  # slate-200
     "status_labeled": "#10b981",    # emerald-500
     # Soft band fills (pre/post) for threshold shading

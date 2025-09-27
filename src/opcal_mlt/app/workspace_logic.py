@@ -2,7 +2,7 @@
 
 """Workspace data/processing helpers for the labeling screen.
 
-This module keeps *logic* separate from Streamlit UI code in `screens.py`.
+This module keeps *logic* separate from Streamlit UI pages.
 Functions here read/write Streamlit's `session_state` (`s`) only as needed and
 return plain Python/numpy objects for plotting and saving.
 """
