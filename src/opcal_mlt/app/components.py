@@ -125,6 +125,65 @@ def render_sidebar_params(s) -> None:
       help=("Time when stimulation starts; used for dual-SD thresholds."),
     )
 
+    st.markdown("### ΔF/F scale")
+    scale_options = ["auto", "dataset", "manual"]
+    _scale_labels = {
+      "auto": "Adaptive (per cell)",
+      "dataset": "Fix to dataset extremes",
+      "manual": "Manual range",
+    }
+    current_scale = str(s.get("y_scale_mode", "auto"))
+    current_scale = current_scale if current_scale in scale_options else "auto"
+    scale_mode = st.radio(
+      "Mode",
+      scale_options,
+      index=scale_options.index(current_scale),
+      format_func=lambda opt: _scale_labels.get(opt, opt),
+      help=(
+        "Control how the y-axis range is chosen. Adaptive follows each cell, "
+        "while the fixed options keep a consistent scale across all cells."
+      ),
+    )
+    s["y_scale_mode"] = scale_mode
+
+    dataset_range = None
+    traces = getattr(s, "traces", None)
+    if isinstance(traces, np.ndarray) and traces.size:
+      try:
+        y_min = float(np.nanmin(traces))
+        y_max = float(np.nanmax(traces))
+        if np.isfinite(y_min) and np.isfinite(y_max):
+          dataset_range = (y_min, y_max)
+      except Exception:
+        dataset_range = None
+
+    if dataset_range and dataset_range[0] < dataset_range[1]:
+      s["_y_range_dataset"] = dataset_range
+      st.caption(f"Dataset extremes: {dataset_range[0]:.3f} … {dataset_range[1]:.3f}")
+    else:
+      if "_y_range_dataset" in s:
+        s.pop("_y_range_dataset", None)
+      if scale_mode == "dataset":
+        st.warning("Unable to compute dataset extremes for fixed scaling.")
+
+    if scale_mode == "manual":
+      default_min = float(s.get("y_manual_min", dataset_range[0] if dataset_range else -0.5))
+      default_max = float(s.get("y_manual_max", dataset_range[1] if dataset_range else 0.5))
+      s["y_manual_min"] = st.number_input(
+        "Manual min",
+        value=default_min,
+        step=0.1,
+        format="%.3f",
+      )
+      s["y_manual_max"] = st.number_input(
+        "Manual max",
+        value=default_max if default_max > default_min else default_min + 1.0,
+        step=0.1,
+        format="%.3f",
+      )
+      if float(s["y_manual_min"]) >= float(s["y_manual_max"]):
+        st.error("Manual max must be greater than min.")
+
 
 # ---------------------------------------------------------------------------
 # Navigation + progress strip

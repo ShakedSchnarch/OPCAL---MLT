@@ -72,7 +72,7 @@ def process_trace_for_cell(s):
     dict
         Keys include: ``x, x_s, base, thr, peaks, t, stim_idx, fs_hz, k, smooth,
         show_raw, show_smoothed, sd_const, rect_y0_pre, rect_y1_pre, rect_y0_post,
-        rect_y1_post``.
+        rect_y1_post, y_scale_mode, y_range``.
     """
     fs_hz = float(s.get("fs_hz", 1.08))
     smooth = bool(s.get("smooth", True))
@@ -113,6 +113,32 @@ def process_trace_for_cell(s):
         x_s, fs_hz, stim_time_s, k=k, ref="median"
     )
 
+    scale_mode = str(s.get("y_scale_mode", "auto"))
+    y_range = None
+    if scale_mode == "dataset":
+        dataset_range = s.get("_y_range_dataset")
+        if dataset_range is None and isinstance(s.get("traces"), np.ndarray):
+            try:
+                arr = np.asarray(s.traces, dtype=float)
+                if arr.size:
+                    y_min = float(np.nanmin(arr))
+                    y_max = float(np.nanmax(arr))
+                    if np.isfinite(y_min) and np.isfinite(y_max) and y_min < y_max:
+                        dataset_range = (y_min, y_max)
+                        s["_y_range_dataset"] = dataset_range
+            except Exception:
+                dataset_range = None
+        if dataset_range and dataset_range[0] < dataset_range[1]:
+            y_range = dataset_range
+    elif scale_mode == "manual":
+        try:
+            y_min = float(s.get("y_manual_min"))
+            y_max = float(s.get("y_manual_max"))
+            if np.isfinite(y_min) and np.isfinite(y_max) and y_min < y_max:
+                y_range = (y_min, y_max)
+        except Exception:
+            y_range = None
+
     return {
         "x": x,
         "x_s": x_s,
@@ -131,4 +157,6 @@ def process_trace_for_cell(s):
         "rect_y1_pre": float(y1_pre),
         "rect_y0_post": float(y0_post),
         "rect_y1_post": float(y1_post),
+        "y_scale_mode": scale_mode,
+        "y_range": y_range,
     }

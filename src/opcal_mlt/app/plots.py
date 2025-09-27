@@ -11,7 +11,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 from opcal_mlt.app.ui import apply_plotly_theme
-from opcal_mlt.core.preprocess import robust_sd_from_mad
+from opcal_mlt.core.preprocess import pre_post_sd_rect_params
 
 
 def make_workspace_figure(
@@ -78,23 +78,16 @@ def make_workspace_figure(
         y0_pre = float(data["rect_y0_pre"]); y1_pre = float(data["rect_y1_pre"]) 
         y0_post = float(data["rect_y0_post"]); y1_post = float(data["rect_y1_post"]) 
     else:
-        # Fallback path: compute spans from the data (pre uses k=1; post uses k)
-        x_s = np.asarray(data.get("x_s", data.get("x", [])), dtype=float)
-        base = np.asarray(data.get("base", np.zeros_like(x_s)), dtype=float)
+        # Fallback path: compute spans via the shared preprocessing helper so the
+        # UI remains consistent even if upstream data lacks explicit rectangle params.
+        x_for_rect = np.asarray(data.get("x_s", data.get("x", [])), dtype=float)
+        fs_val = float(data.get("fs_hz", 1.0))
+        stim_time_val = float(data.get("stim_time_s", 0.0))
         k_val = float(data.get("k", 3.0))
 
-        pre = x_s[:si] - base[:si]
-        post = x_s[si:] - base[si:]
-
-        # Reference levels (medians of baseline segments)
-        ref_pre = float(np.median(base[:si])) if si > 0 else 0.0
-        ref_post = float(np.median(base[si:])) if si < len(base) else (float(base[-1]) if len(base) else 0.0)
-
-        sd_pre = float(robust_sd_from_mad(pre)) if pre.size else 0.0
-        sd_post = float(robust_sd_from_mad(post)) if post.size else 0.0
-
-        y0_pre,  y1_pre  = ref_pre,  ref_pre  + sd_pre              # k = 1 for pre
-        y0_post, y1_post = ref_post, ref_post + k_val * sd_post     # k for post
+        y0_pre, y1_pre, y0_post, y1_post, _ = pre_post_sd_rect_params(
+            x_for_rect, fs_val, stim_time_val, k=k_val, ref="median"
+        )
 
     if y1_pre > y0_pre and len(t) >= 2 and si >= 0:
         fig.add_shape(
@@ -129,8 +122,21 @@ def make_workspace_figure(
             )
         )
 
-    fig.update_layout(height=height, margin=dict(l=10, r=10, t=32, b=10))
+    fig.update_layout(height=height, margin=dict(l=64, r=24, t=48, b=48))
     apply_plotly_theme(fig, theme)
+    y_axis_kwargs = dict(
+        tickformat=".3f",
+        hoverformat=".4f",
+        exponentformat="none",
+    )
+    if isinstance(data.get("y_range"), (list, tuple)) and len(data["y_range"]) == 2:
+        try:
+            y0, y1 = float(data["y_range"][0]), float(data["y_range"][1])
+            if y0 < y1:
+                y_axis_kwargs["range"] = [y0, y1]
+        except Exception:
+            pass
+    fig.update_yaxes(**y_axis_kwargs)
     return fig
 
 

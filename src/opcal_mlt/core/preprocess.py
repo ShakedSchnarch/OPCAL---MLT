@@ -127,13 +127,15 @@ def pre_post_sd_rect_params(
     """Compute parameters for two *floating* SD·k rectangles (pre/post stim).
 
     Visual-only helper that returns constant vertical spans for two rectangles
-    that **do not** attach to the dynamic baseline. For each segment, pick a
-    constant reference level (segment median by default) and compute a robust
-    SD via :func:`robust_sd_from_mad` on residuals relative to that level.
+    that **do not** attach to the dynamic baseline. The pre-stimulus segment
+    provides the reference level (median by default) and robust SD estimate.
+    The post-stimulus band reuses that same reference level and SD so its
+    height is ``baseline + k·SD_pre`` (making it a direct function of the pre
+    segment, as requested in the UI spec).
 
     The returned spans are:
-    - ``[y0_pre,  y1_pre]  = [ref_pre,  ref_pre  + SD_pre]``  (pre **does not** use *k*)
-    - ``[y0_post, y1_post] = [ref_post, ref_post + k·SD_post]``  (post uses *k*)
+    - ``[y0_pre,  y1_pre]  = [ref_pre, ref_pre + SD_pre]``  (pre **does not** use *k*)
+    - ``[y0_post, y1_post] = [ref_pre, ref_pre + k·SD_pre]``  (post uses *k* with pre SD)
 
     Parameters
     ----------
@@ -144,7 +146,8 @@ def pre_post_sd_rect_params(
     stim_time_s : float
         Time (seconds) at which stimulation starts.
     k : float, default=3.0
-        Multiplier applied **only to the post‑stimulus** robust SD (band height). The pre‑stimulus band uses k = 1.
+        Multiplier applied to the **post** rectangle height via ``ref_pre + k·SD_pre``.
+        The pre‑stimulus band uses ``k = 1`` (baseline + SD_pre).
     ref : {"median", "zero"}, default="median"
         How to choose the constant reference level per segment.
 
@@ -169,20 +172,9 @@ def pre_post_sd_rect_params(
     y1_pre = ref_pre + sd_pre
 
     # --- Post segment ---
-    post = x[stim_idx:] if stim_idx < n else np.empty((0,), dtype=float)
-    if post.size == 0:
-        # Fallback: use pre if post is empty/tiny
-        ref_post = ref_pre
-        sd_post = sd_pre
-    else:
-        if ref == "zero":
-            ref_post = 0.0
-        else:
-            ref_post = float(np.median(post))
-        sd_post = robust_sd_from_mad(post - ref_post)
-        sd_post = float(max(sd_post, 1e-9))
-
-    y0_post = ref_post
-    y1_post = ref_post + float(k) * sd_post
+    # Keep the band anchored to the pre reference/scale so the red rectangle
+    # remains a direct function of the pre segment (baseline + k·SD_pre).
+    y0_post = ref_pre
+    y1_post = ref_pre + float(k) * sd_pre
 
     return float(y0_pre), float(y1_pre), float(y0_post), float(y1_post), int(stim_idx)

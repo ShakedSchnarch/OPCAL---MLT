@@ -214,6 +214,16 @@ def inject_theme_css(palette: dict) -> None:
     /* Tighter default gap in columns (helps reduce "holes") */
     .element-container:has(> div[data-testid="column"]) { margin-bottom: 0.4rem; }
 
+    /* Responsive columns: stack when viewport is narrow so controls never clip */
+    @media (max-width: 1280px) {
+      div[data-testid="stHorizontalBlock"] { flex-wrap: wrap; }
+      div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+        flex: 1 1 100% !important;
+        width: 100% !important;
+        min-width: unset !important;
+      }
+    }
+
     /* --- Custom progress bar for labeling step --- */
     .progress-track {
       width: 100%; height: 10px; background: #e5e7eb; border-radius: 999px; overflow: hidden;
@@ -269,6 +279,7 @@ def apply_plotly_theme(fig, theme: dict | None = None):
         linecolor=th["border"],
         gridcolor=th["border"],
         zerolinecolor=th["border"],
+        automargin=True,
     )
     fig.update_yaxes(
         showline=True,
@@ -276,6 +287,7 @@ def apply_plotly_theme(fig, theme: dict | None = None):
         linecolor=th["border"],
         gridcolor=th["border"],
         zerolinecolor=th["border"],
+        automargin=True,
     )
 
     return fig
