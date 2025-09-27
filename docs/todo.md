@@ -1,17 +1,17 @@
 # רשימת משימות — OPCAL-MLT
 
-- [ ]  STD rectangles: pre vs post
-- [ ]  Visualization:
-  - [ ]  Y axis value
-  - [ ]  fix scale
-- [ ]  peak detection parameters
-- [ ]  Code refactor
+- [x]  STD rectangles: pre vs post
+- [x]  Visualization:
+  - [x]  Y axis value
+  - [x]  fix scale
+- [x]  peak detection parameters
+- [x]  Code refactor
 - [ ]  Implement one‑Click Launch if applicable
 - [ ]  Refresh option
-- [ ]  Update documentation if neede
-- [ ]  tester
+- [ ]  Update documentation and files
+- [x]  tester
 - [ ]  sliding bar
-- [ ]  documentation standartization
+- [x]  documentation standartization
 
 
 
@@ -48,3 +48,8 @@
 - [ ] לבנות Dockerfile בספריית הפרויקט, להריץ בדיקות בתוך הקונטיינר ולהכין תהליך CI שדוחף image מתויגת לכל release.
 - [ ] להגדיר GitHub Actions או כלי CI חלופי שמריץ lint, בדיקות, בניית חבילות (pip + macOS zip) ויוצר ארטיפקטים חתומים לפרסום.
 - [ ] לתעד את תהליך ה-CI/CD החדש ב-`docs/devops.md` ולהוסיף תרשים זרימה ב-`docs/assets/`.
+
+
+- אני רוצה שהסרגל יהיה פתוח דיפולטית אבל כרגע הוא מופיע מקופל. כמו כן, אין כפתור לפתוח אותו.  בנוסף, בלחיצה על טען מחדש בדפדפן זה מחזיר חזרה שלב ולא ממשיך מהמסך בו היינו וגם נוצרת שגיאה כזו. כמו כן, ביצירה האוטונמטית של cell_id, אין תצוגה מקדימה של המספרי זיהוי של הלייבלים לפי הבחירה הדיפולטית שהייתה לנו. תתקן את כל הנקודות האלה בבקשה, אחת אחת ובאופן מסודר
+- תתאים את הקבצים הללו לפרויקט כפי שהוא כרגע, לאחר השינויים שהתבצעו אך במבט כולל שמי שנתקל בו לראשונה יבין ויוכל לבצע את מה שהוא צריך(לפי קהלי היעד, קובץ שמכוון למשתמש יתאים למידע שמעניין משתמש, readme למפתחים, תיעוד למפתחים וכו) שיהיו מאורגנים ומסודרים, מהודקים ומתוכננים, ללא פאצינג ובשימוש מתוחכם במארקדאוון לתצוגה יפה ונעימה
+- 
