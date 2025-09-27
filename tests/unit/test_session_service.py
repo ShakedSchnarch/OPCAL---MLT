@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -16,7 +16,7 @@ def session_service():
 
 @pytest.fixture
 def session_config(tmp_path):
-    return SessionConfig(annotator_id="ann", save_root=tmp_path, created_at=datetime.utcnow())
+    return SessionConfig(annotator_id="ann", save_root=tmp_path, created_at=datetime.now(timezone.utc))
 
 
 def test_start_creates_session_dir(session_service, session_config):
@@ -42,7 +42,7 @@ def test_hydrate_labels_returns_map(session_service, session_config):
             "session_id": ctx.paths.session_dir.name,
             "recording_id": "rec3",
             "annotator_id": "ann",
-            "saved_utc": datetime.utcnow().isoformat(),
+            "saved_utc": datetime.now(timezone.utc).isoformat(),
             "cell_index": 0,
             "cell_id": "cell_000",
             "label": "Oscillatory",
@@ -76,7 +76,7 @@ def test_list_resumable_sessions_orders_by_mtime(session_service, session_config
             "session_id": ctx1.paths.session_dir.name,
             "recording_id": "recA",
             "annotator_id": "ann",
-            "saved_utc": datetime.utcnow().isoformat(),
+            "saved_utc": datetime.now(timezone.utc).isoformat(),
             "cell_index": 0,
             "cell_id": "cell_000",
             "label": "Oscillatory",
@@ -104,7 +104,7 @@ def test_list_resumable_sessions_orders_by_mtime(session_service, session_config
             "session_id": ctx2.paths.session_dir.name,
             "recording_id": "recB",
             "annotator_id": "ann",
-            "saved_utc": datetime.utcnow().isoformat(),
+            "saved_utc": datetime.now(timezone.utc).isoformat(),
             "cell_index": 0,
             "cell_id": "cell_000",
             "label": "Oscillatory",

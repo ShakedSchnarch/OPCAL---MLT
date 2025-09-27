@@ -31,22 +31,25 @@ class SessionContext:
 class SessionService:
     """High-level orchestration around session folders and CSV artifacts."""
 
-    def start(self, config: SessionConfig, recording_id: str) -> SessionContext:
+    def start(
+        self,
+        config: SessionConfig,
+        recording_id: str,
+        *,
+        metadata: Optional[dict] = None,
+    ) -> SessionContext:
         session_dir = make_session_dir(config.save_root, recording_id, config.annotator_id)
         paths = SessionPaths(base_dir=session_dir.parent, session_dir=session_dir)
-        write_session_header(
-            session_dir,
-            {
-                "session_id": session_dir.name,
-                "recording_id": recording_id,
-                "annotator_id": config.annotator_id,
-                "fs_hz": "",
-                "started_utc": now_utc_iso(),
-                "app_version": "",
-                "source_path": "",
-                "source_sha256": "",
-            },
-        )
+        header = metadata.copy() if metadata else {}
+        header.setdefault("session_id", session_dir.name)
+        header.setdefault("recording_id", recording_id)
+        header.setdefault("annotator_id", config.annotator_id)
+        header.setdefault("fs_hz", "")
+        header.setdefault("started_utc", now_utc_iso())
+        header.setdefault("app_version", "")
+        header.setdefault("source_path", "")
+        header.setdefault("source_sha256", "")
+        write_session_header(session_dir, header)
         return SessionContext(config=config, paths=paths, recording_id=recording_id)
 
     def hydrate_labels(self, session_dir: Path) -> LabelMap:

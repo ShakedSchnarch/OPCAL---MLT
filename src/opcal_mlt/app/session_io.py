@@ -62,7 +62,7 @@ def make_session_dir(base_dir: Path, recording_id: str, annotator: str) -> Path:
     The directory is created if missing.
     """
 
-    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     sess = base_dir / recording_id / f"{ts}_{annotator}"
     sess.mkdir(parents=True, exist_ok=True)
     return sess
