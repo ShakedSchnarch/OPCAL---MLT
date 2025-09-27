@@ -37,7 +37,7 @@ src/opcal_mlt/
 
 ## Migration Checklist
 1. Introduce domain + services layers (this branch).
-2. Move session hydration/export logic from `app/screens.py` into services.
+2. Move session hydration/export logic from legacy app modules into the shared services layer.
 3. Split `screens.py` into dedicated `app/views/*` modules using the router.
 4. Replace direct `st.session_state` access with `StateAdapter` in pages.
 5. Delete legacy helpers once coverage confirms parity, update documentation.

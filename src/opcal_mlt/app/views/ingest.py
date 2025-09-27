@@ -32,6 +32,7 @@ def render(*, state: StateAdapter, ingest_service: IngestService) -> None:
     suffix = Path(uploaded.name).suffix.lower()
     raw_bytes = uploaded.getvalue()
     buffer_for_service = io.BytesIO(raw_bytes)
+    buffer_for_service.name = uploaded.name
 
     try:
         trace_set, meta = ingest_service.load_trace_set(buffer_for_service)

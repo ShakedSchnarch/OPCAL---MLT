@@ -7,8 +7,8 @@
 - Updated README, USER_GUIDE, and API documentation to reflect new version.
 
 ### Changed
-- Refactored `main.py` and `ui.py` for improved readability and consistency.
-- Clarified separation of logic across `screens.py`, `plots.py`, and `components.py`.
+- Refactored Streamlit entry (`app/app.py`) and theming to support router-driven views.
+- Replaced legacy `screens.py` with modular `app/views/*` files and reusable components.
 - Improved handling of STD * k rectangles in preprocessing logic (only post-stimulus red rectangle scaled, green remains baseline).
 
 ### Fixed

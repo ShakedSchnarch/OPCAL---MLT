@@ -1,7 +1,6 @@
 # OPCAL‑MLT — Manual Labeling Tool
 
-A lightweight Streamlit application for manual labeling of calcium imaging traces (ΔF/F) with baseline and stimulus‑aligned utilities.
-![alt text](image.png)
+A lightweight Streamlit application for manual labeling of calcium imaging traces (ΔF/F) with baseline and stimulus-aligned utilities.
 > **Version:** **v1.0.0**
 ---
 
