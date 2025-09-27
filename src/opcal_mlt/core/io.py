@@ -1,10 +1,9 @@
 """
-I/O helpers for loading calcium traces and saving JSONL records.
+I/O Utilities
+=============
 
-This module provides functions to load calcium imaging traces from CSV or NPZ files,
-returning both the trace data and associated metadata, as well as to save lists of
-Python dictionaries as JSON Lines (JSONL) files. Basic validation and clear error
-messages are provided for unsupported formats or missing data.
+Helpers for loading calcium traces and saving JSONL records in OPCAL-Labeler.
+Includes functions for reading CSV/NPZ files and writing JSON Lines files, with validation and error handling.
 """
 from __future__ import annotations
 import json
@@ -17,23 +16,21 @@ def load_traces(path: str | Path) -> Tuple[np.ndarray, Dict[str, Any]]:
     """
     Load calcium traces and associated metadata from a CSV or NPZ file.
 
-    Parameters
-    ----------
-    path : str or Path
-        Path to the traces file. Supported formats: .csv (columns as cells), .npz (must contain 'traces').
+    Args:
+        path (str | Path): Path to the traces file. Supported formats: .csv (columns as cells), .npz (must contain 'traces').
 
-    Returns
-    -------
-    traces : np.ndarray
-        2D array of shape (T, N) with calcium traces, where T is time and N is number of cells.
-    meta : dict
-        Dictionary containing metadata. For CSV, includes "cell_ids" (list of column names).
-        For NPZ, includes all keys except "traces".
+    Returns:
+        Tuple[np.ndarray, dict]:
+            traces: 2D array of shape (T, N) with calcium traces, where T is time and N is number of cells.
+            meta: Dictionary containing metadata. For CSV, includes "cell_ids" (list of column names). For NPZ, includes all keys except "traces".
 
-    Raises
-    ------
-    ValueError
-        If the file format is unsupported or required data is missing.
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        ValueError: If the file format is unsupported or required data is missing.
+
+    Notes:
+        - For NPZ files, all metadata keys except 'traces' are loaded and converted to native Python types if possible.
+        - For CSV files, columns are treated as cell IDs.
     """
     path = Path(path)
     meta: Dict[str, Any] = {}
@@ -66,17 +63,16 @@ def save_jsonl(records: List[dict], path: str | Path) -> None:
     """
     Save a list of dictionaries as a JSON Lines (JSONL) file.
 
-    Parameters
-    ----------
-    records : List[dict]
-        List of Python dictionaries to serialize, one per line.
-    path : str or Path
-        Output file path. Parent directories are created if needed.
+    Args:
+        records (List[dict]): List of Python dictionaries to serialize, one per line.
+        path (str | Path): Output file path. Parent directories are created if needed.
 
-    Raises
-    ------
-    ValueError
-        If `records` is not a list of dictionaries.
+    Raises:
+        ValueError: If `records` is not a list of dictionaries.
+
+    Notes:
+        - Minimal quoting for compact JSONL output.
+        - Parent directories are created automatically if missing.
     """
     path = Path(path)
     if not isinstance(records, list) or not all(isinstance(r, dict) for r in records):

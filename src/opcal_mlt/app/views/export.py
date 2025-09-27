@@ -1,4 +1,13 @@
-"""Streamlit page: Step 4 — finish & export."""
+"""
+Step 4 — Finish & Export
+========================
+
+This module implements the final step of the labeling workflow in the OPCAL MLT tool.
+Users can review session statistics and export the completed labeling session as a ZIP archive.
+
+Functions:
+    render: Main entry point for the Streamlit page.
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,13 +22,17 @@ from opcal_mlt.core import features as ft
 from opcal_mlt.services.export import ExportService
 from opcal_mlt.services.sessions import SessionService
 
-
 def render(
-    *,
-    state: StateAdapter,
-    session_service: SessionService,
-    export_service: ExportService,
-) -> None:
+
+# ==== Main Page Renderer ====
+def render(*, state, session_service, export_service):
+    """Render the Step 4 Streamlit page for finishing and exporting the session.
+
+    Args:
+        state: The application state adapter.
+        session_service: Service for session management.
+        export_service: Service for exporting session data.
+    """
     st.markdown("<div class='step-header'>Step 4 — Finish & export</div>", unsafe_allow_html=True)
     session_dir_str = state.get_session_dir()
     if not session_dir_str:

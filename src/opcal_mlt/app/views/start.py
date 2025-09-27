@@ -1,4 +1,16 @@
-"""Streamlit page: Step 1 — start, resume, or load a session."""
+"""
+Step 1 — Start, Resume, or Load a Session
+=========================================
+
+This module implements the first step of the labeling workflow in the OPCAL MLT tool.
+Users can initialize a new labeling session, resume a recent session, or load a session from disk.
+
+Functions:
+    render: Main entry point for the Streamlit page.
+    _render_new_session: UI for starting a new session.
+    _render_resume: UI for resuming a recent session.
+    _render_load_from_path: UI for loading a session from a specified path.
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -11,8 +23,16 @@ from opcal_mlt.services.sessions import SessionService
 
 _DEFAULT_SAVE_ROOT = Path.home() / "OPCAL_LABELS"
 
-
 def render(*, state: StateAdapter, session_service: SessionService) -> None:
+
+# ==== Main Page Renderer ====
+def render(*, state: StateAdapter, session_service: SessionService) -> None:
+    """Render the Step 1 Streamlit page for starting, resuming, or loading a session.
+
+    Args:
+        state (StateAdapter): The application state adapter.
+        session_service (SessionService): Service for session management.
+    """
     st.markdown("<div class='step-header'>Step 1 — Start session</div>", unsafe_allow_html=True)
     st.caption("Initialize a new labeling run, resume a recent session, or load one from disk.")
 
@@ -33,8 +53,15 @@ def render(*, state: StateAdapter, session_service: SessionService) -> None:
     else:
         _render_load_from_path(state, session_service)
 
-
 def _render_new_session(state: StateAdapter) -> None:
+
+# ==== Session Creation ====
+def _render_new_session(state: StateAdapter) -> None:
+    """Render UI for starting a new labeling session.
+
+    Args:
+        state (StateAdapter): The application state adapter.
+    """
     st.markdown("### New session")
     default_root = state.get_save_dir().strip() or str(_DEFAULT_SAVE_ROOT)
 

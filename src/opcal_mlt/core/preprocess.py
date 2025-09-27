@@ -1,16 +1,10 @@
 """
-Preprocessing utilities for OPCAL‑Labeler.
+Preprocessing Utilities
+======================
 
-This module provides lightweight, transparent signal‑processing helpers used by
-the UI layer. The emphasis is on robustness and interpretability rather than
-heavy filtering:
-  • Savitzky–Golay smoothing (phase‑preserving) for denoising
-  • Baseline estimation via rolling median or global percentile
-  • Robust scale (SD) estimate via MAD (1.4826×MAD)
-  • Threshold construction: baseline + k·SD, including dual‑SD (pre/post stimulus)
-
-Usage: the UI calls :func:`pre_post_sd_rect_params` to draw two floating SD·k
-rectangles (0→stim, stim→end) above the trace without binding them to baseline.
+Signal preprocessing helpers for OPCAL‑Labeler.
+Includes Savitzky–Golay smoothing, baseline estimation, robust SD calculation, and threshold construction.
+All functions are designed for robustness and interpretability in research workflows.
 """
 
 from __future__ import annotations
@@ -26,21 +20,19 @@ DEFAULT_ROLLING_WINDOW_S: float = 20.0  # Typical rolling-median window (seconds
 
 
 def smooth_signal(x: np.ndarray, window: int = 31, polyorder: int = 3) -> np.ndarray:
-    """Return a Savitzky–Golay smoothed copy of a 1D signal.
+    """
+    Return a Savitzky–Golay smoothed copy of a 1D signal.
 
-    Parameters
-    ----------
-    x : np.ndarray
-        1D input signal of shape (T,).
-    window : int, default=31
-        Window length (samples). Will be coerced to an odd integer ≥ 5.
-    polyorder : int, default=3
-        Polynomial order for the filter (1–5 typical).
+    Args:
+        x (np.ndarray): 1D input signal of shape (T,).
+        window (int, optional): Window length (samples). Will be coerced to an odd integer ≥ 5. Default is 31.
+        polyorder (int, optional): Polynomial order for the filter (1–5 typical). Default is 3.
 
-    Notes
-    -----
-    If the signal is shorter than the effective window, the original signal is
-    returned unchanged to avoid edge artifacts.
+    Returns:
+        np.ndarray: Smoothed signal of same shape as input.
+
+    Notes:
+        If the signal is shorter than the effective window, the original signal is returned unchanged to avoid edge artifacts.
     """
 
     # Ensure an odd window ≥ 5, clamp polyorder to a sensible range
@@ -54,21 +46,16 @@ def smooth_signal(x: np.ndarray, window: int = 31, polyorder: int = 3) -> np.nda
 
 
 def baseline_rolling_median(x: np.ndarray, fs_hz: float, window_s: float = DEFAULT_ROLLING_WINDOW_S) -> np.ndarray:
-    """Estimate a slowly varying baseline using a rolling median window.
+    """
+    Estimate a slowly varying baseline using a rolling median window.
 
-    Parameters
-    ----------
-    x : np.ndarray
-        1D signal of shape (T,).
-    fs_hz : float
-        Sampling rate in Hertz.
-    window_s : float, default=20.0
-        Median window size in seconds (typ. 10–30 s).
+    Args:
+        x (np.ndarray): 1D signal of shape (T,).
+        fs_hz (float): Sampling rate in Hertz.
+        window_s (float, optional): Median window size in seconds (typ. 10–30 s). Default is 20.0.
 
-    Returns
-    -------
-    np.ndarray
-        Baseline array of shape (T,) aligned to ``x``.
+    Returns:
+        np.ndarray: Baseline array of shape (T,) aligned to ``x``.
     """
 
     # Convert seconds to samples and make the window odd (≥ 1)
@@ -89,14 +76,15 @@ def baseline_rolling_median(x: np.ndarray, fs_hz: float, window_s: float = DEFAU
 
 
 def baseline_percentile(x: np.ndarray, q: float = 25.0) -> np.ndarray:
-    """Return a flat baseline at a global percentile of the signal.
+    """
+    Return a flat baseline at a global percentile of the signal.
 
-    Parameters
-    ----------
-    x : np.ndarray
-        1D signal of shape (T,).
-    q : float, default=25.0
-        Percentile in [0, 100]. Typically 20–30 captures the quiescent level.
+    Args:
+        x (np.ndarray): 1D signal of shape (T,).
+        q (float, optional): Percentile in [0, 100]. Typically 20–30 captures the quiescent level. Default is 25.0.
+
+    Returns:
+        np.ndarray: Baseline array of shape (T,) with constant value at the given percentile.
     """
 
     b = np.percentile(x, q)
@@ -104,11 +92,14 @@ def baseline_percentile(x: np.ndarray, q: float = 25.0) -> np.ndarray:
 
 
 def robust_sd_from_mad(x: np.ndarray) -> float:
-    """Estimate a robust SD as ``MAD_TO_SD × median(|x - median(x)|)``.
+    """
+    Estimate a robust SD as ``MAD_TO_SD × median(|x - median(x)|)``.
 
-    Falls back to unbiased standard deviation when MAD is degenerate and
-    clamps to a tiny positive floor (``EPS_SD``) so that downstream
-    thresholds are always responsive to *k*.
+    Args:
+        x (np.ndarray): 1D signal array.
+
+    Returns:
+        float: Robust SD estimate. Falls back to unbiased standard deviation when MAD is degenerate and clamps to a tiny positive floor (``EPS_SD``).
     """
     mad = np.median(np.abs(x - np.median(x)))
     sd = MAD_TO_SD * mad
@@ -122,59 +113,48 @@ def pre_post_sd_rect_params(
     fs_hz: float,
     stim_time_s: float,
     k: float = 3.0,
-    ref: str = "median",
+    ref: str = "mean",
 ) -> Tuple[float, float, float, float, int]:
-    """Compute parameters for two *floating* SD·k rectangles (pre/post stim).
+    """
+    Compute parameters for two *floating* SD·k rectangles (pre/post stim).
 
-    Visual-only helper that returns constant vertical spans for two rectangles
-    that **do not** attach to the dynamic baseline. The pre-stimulus segment
-    provides the reference level (median by default) and robust SD estimate.
-    The post-stimulus band reuses that same reference level and SD so its
-    height is ``baseline + k·SD_pre`` (making it a direct function of the pre
-    segment, as requested in the UI spec).
+    Args:
+        x (np.ndarray): 1D signal of shape (T,).
+        fs_hz (float): Sampling rate in Hertz.
+        stim_time_s (float): Time (seconds) at which stimulation starts.
+        k (float, optional): Multiplier applied to the **post** rectangle height via ``ref_post + k·SD_post``. Default is 3.0.
+        ref (str, optional): How to choose the constant reference level per segment. {"mean", "median", "zero"}. Default is "mean".
 
-    The returned spans are:
-    - ``[y0_pre,  y1_pre]  = [ref_pre, ref_pre + SD_pre]``  (pre **does not** use *k*)
-    - ``[y0_post, y1_post] = [ref_pre, ref_pre + k·SD_pre]``  (post uses *k* with pre SD)
-
-    Parameters
-    ----------
-    x : np.ndarray
-        1D signal of shape (T,).
-    fs_hz : float
-        Sampling rate in Hertz.
-    stim_time_s : float
-        Time (seconds) at which stimulation starts.
-    k : float, default=3.0
-        Multiplier applied to the **post** rectangle height via ``ref_pre + k·SD_pre``.
-        The pre‑stimulus band uses ``k = 1`` (baseline + SD_pre).
-    ref : {"median", "zero"}, default="median"
-        How to choose the constant reference level per segment.
-
-    Returns
-    -------
-    (y0_pre, y1_pre, y0_post, y1_post, stim_idx)
-        Rectangle base/top values for the pre/post segments and the
-        stimulus index used for splitting.
+    Returns:
+        Tuple[float, float, float, float, int]: Rectangle base/top values for the pre/post segments and the stimulus index used for splitting.
     """
     n = int(x.size)
     stim_idx = int(max(0, min(n - 1, round(float(stim_time_s) * float(fs_hz)))))
 
     # --- Pre segment ---
     pre = x[:stim_idx] if stim_idx > 0 else x
-    if ref == "zero":
+    ref_normalized = ref.lower().strip()
+    if ref_normalized == "median":
+        ref_normalized = "mean"
+
+    if ref_normalized == "zero":
         ref_pre = 0.0
     else:
-        ref_pre = float(np.median(pre))
+        ref_pre = float(np.mean(pre)) if pre.size else 0.0
     sd_pre = robust_sd_from_mad(pre - ref_pre)
     sd_pre = float(max(sd_pre, 1e-9))
     y0_pre = ref_pre
     y1_pre = ref_pre + sd_pre
 
     # --- Post segment ---
-    # Keep the band anchored to the pre reference/scale so the red rectangle
-    # remains a direct function of the pre segment (baseline + k·SD_pre).
-    y0_post = ref_pre
-    y1_post = ref_pre + float(k) * sd_pre
+    post = x[stim_idx:] if stim_idx < n else x[-1:]
+    if ref_normalized == "zero":
+        ref_post = 0.0
+    else:
+        ref_post = float(np.mean(post)) if post.size else 0.0
+    sd_post = robust_sd_from_mad(post - ref_post)
+    sd_post = float(max(sd_post, 1e-9))
+    y0_post = ref_post
+    y1_post = ref_post + float(k) * sd_post
 
     return float(y0_pre), float(y1_pre), float(y0_post), float(y1_post), int(stim_idx)

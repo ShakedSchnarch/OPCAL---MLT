@@ -1,4 +1,15 @@
-"""Streamlit page: Step 2 — upload traces and assign cell IDs."""
+"""
+Step 2 — Upload Traces and Assign Cell IDs
+==========================================
+
+This module implements the second step of the labeling workflow in the OPCAL MLT tool.
+Users upload CSV/NPZ files, preview traces, and map cell IDs for further analysis.
+
+Functions:
+    render: Main entry point for the Streamlit page.
+    _render_csv_flow: UI for CSV file upload and mapping.
+    _render_npz_flow: UI for NPZ file upload and mapping.
+"""
 from __future__ import annotations
 
 import io
@@ -13,8 +24,16 @@ from opcal_mlt.app.state import StateAdapter
 from opcal_mlt.domain.models import TraceSet
 from opcal_mlt.services.ingest import IngestService
 
-
 def render(*, state: StateAdapter, ingest_service: IngestService) -> None:
+
+# ==== Main Page Renderer ====
+def render(*, state: StateAdapter, ingest_service: IngestService) -> None:
+    """Render the Step 2 Streamlit page for uploading traces and assigning cell IDs.
+
+    Args:
+        state (StateAdapter): The application state adapter.
+        ingest_service (IngestService): Service for ingesting trace data.
+    """
     st.markdown("<div class='step-header'>Step 2 — Upload & indexing</div>", unsafe_allow_html=True)
     st.caption("Upload a CSV/NPZ file, preview it, and decide how to map cell IDs.")
 
@@ -77,7 +96,7 @@ def _render_csv_flow(
 
     st.subheader("Cell ID mapping")
     options = ("Auto-generate IDs", "Use column headers", "Import external mapping CSV")
-    mode = st.radio("Choose mapping strategy", options, index=1, key="csv_mapping_mode")
+    mode = st.radio("Choose mapping strategy", options, index=0, key="csv_mapping_mode")
 
     if mode == "Use column headers":
         state.set_cell_ids([str(col) for col in df_preview.columns.astype(str)])
@@ -110,9 +129,7 @@ def _render_npz_flow(
         mode_options.append("Use IDs from NPZ")
     mode_options.extend(["Import external mapping CSV", "Auto-generate IDs"])
 
-    default_index = 0
-    if not has_ids:
-        default_index = mode_options.index("Auto-generate IDs")
+    default_index = mode_options.index("Auto-generate IDs") if "Auto-generate IDs" in mode_options else 0
 
     mode = st.radio("Choose mapping strategy", tuple(mode_options), index=default_index, key="npz_mapping_mode")
 

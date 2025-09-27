@@ -1,4 +1,9 @@
-"""Export utilities (ZIP bundles, manifest helpers)."""
+"""
+Export Service
+==============
+
+Provides utilities for exporting session data, including creating ZIP archives for sharing or backup.
+"""
 from __future__ import annotations
 
 import shutil
@@ -6,9 +11,26 @@ from pathlib import Path
 
 
 class ExportService:
-    """Create archives for sharing or backup."""
+    """
+    Service for exporting session data as ZIP archives.
+
+    Methods:
+        export_session: Creates a ZIP archive of a session directory for sharing or backup.
+    """
 
     def export_session(self, session_dir: Path) -> Path:
+        """
+        Create a ZIP archive of the given session directory.
+
+        Args:
+            session_dir (Path): Path to the session directory to archive.
+
+        Returns:
+            Path: Path to the created ZIP archive.
+
+        Raises:
+            FileNotFoundError: If the session directory does not exist.
+        """
         session_dir = Path(session_dir)
         if not session_dir.exists():
             raise FileNotFoundError(f"Session directory not found: {session_dir}")

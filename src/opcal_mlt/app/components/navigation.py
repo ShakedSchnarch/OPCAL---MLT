@@ -14,8 +14,6 @@ def render_navigation_and_progress(container, state, total_cells: int, theme: Di
     with container:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("Cells")
-        if state.get("session_dir"):
-            st.caption(f"Session: {state.session_dir}")
         idx = st.number_input("Cell index", 0, total_cells - 1, int(state.current_cell), step=1, key="cell_index")
         state.current_cell = int(idx)
 

@@ -110,7 +110,7 @@ def process_trace_for_cell(s):
 
     # Parameters for floating SD·k rectangles (pre/post), independent of baseline UI
     y0_pre, y1_pre, y0_post, y1_post, _stim_idx_rect = pp.pre_post_sd_rect_params(
-        x_s, fs_hz, stim_time_s, k=k, ref="median"
+        x_s, fs_hz, stim_time_s, k=k, ref="mean"
     )
 
     scale_mode = str(s.get("y_scale_mode", "auto"))

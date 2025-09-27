@@ -1,4 +1,10 @@
-"""Lightweight file-based logging scoped to session folders."""
+"""
+Logging Service
+===============
+
+Provides lightweight file-based logging scoped to session folders.
+Used for diagnostic and session-level event tracking.
+"""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -7,17 +13,43 @@ from typing import Protocol
 
 
 class Logger(Protocol):
-    def __call__(self, message: str) -> None:  # pragma: no cover - protocol signature
+    """
+    Protocol for logging callable objects.
+
+    Args:
+        message (str): Log message to record.
+    """
+    def __call__(self, message: str) -> None:
         ...
 
 
 class SessionLogger:
-    """Append UTC timestamped lines to ``session.log`` if the folder exists."""
+    """
+    Logger that appends UTC timestamped lines to session.log in the session folder.
+
+    Attributes:
+        _session_dir (Path | None): Path to the session directory.
+    """
 
     def __init__(self, session_dir: Path | None) -> None:
+        """
+        Initialize the session logger.
+
+        Args:
+            session_dir (Path | None): Path to the session directory.
+        """
         self._session_dir = Path(session_dir) if session_dir else None
 
     def __call__(self, message: str) -> None:
+        """
+        Log a message to session.log with a UTC timestamp.
+
+        Args:
+            message (str): Log message to record.
+
+        Notes:
+            Silent failure is acceptable for diagnostic logging (no exception raised).
+        """
         if not self._session_dir:
             return
         try:

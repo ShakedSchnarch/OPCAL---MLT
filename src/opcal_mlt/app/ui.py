@@ -50,41 +50,6 @@ def inject_theme_css(palette: dict) -> None:
     [data-testid="stSidebar"] {
       background: var(--panel) !important;
       border-right: 1px solid var(--border);
-      width: 320px !important;
-      min-width: 320px !important;
-    }
-    /* Force sidebar to be visible (no collapse, no translate) */
-    [data-testid="stSidebar"] {
-      transform: none !important;
-      opacity: 1 !important;
-      pointer-events: auto !important;
-      visibility: visible !important;
-      display: block !important;
-    }
-    /* Hide built-in sidebar collapse/expand chevron */
-    button[aria-label="Toggle sidebar"],
-    button[title="Toggle sidebar"],
-    [data-testid="baseButton-headerNoPadding"][aria-label*="sidebar"],
-    [data-testid="collapsedControl"],
-    [data-testid="stSidebarCollapseButton"] {
-      display: none !important;
-    }
-    /* Safety: defeat any upstream body-based collapse states */
-    body[class*="collapsed"], body.sb-collapsed {
-      overflow: auto !important;
-    }
-    body[class*="collapsed"] [data-testid="stSidebar"],
-    body.sb-collapsed [data-testid="stSidebar"] {
-      transform: none !important;
-      opacity: 1 !important;
-      pointer-events: auto !important;
-      visibility: visible !important;
-      display: block !important;
-    }
-    /* Some Streamlit builds wrap the content in an inner container */
-    [data-testid="stSidebar"] section[tabindex="0"] {
-      width: 320px !important;
-      min-width: 320px !important;
     }
 
     [data-testid="stStatusWidget"], #MainMenu, footer { visibility: hidden !important; }

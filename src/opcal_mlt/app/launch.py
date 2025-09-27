@@ -1,8 +1,9 @@
 """
-Launch script for the OPCAL-MLT Streamlit application.
+Application Launcher
+===================
 
-This script serves as the entry point for running the Manual Labeling Tool locally.
-It programmatically invokes the Streamlit CLI to run `main.py` in headless mode.
+Entry point for running the OPCAL-MLT Streamlit application locally.
+Programmatically invokes the Streamlit CLI to run `main.py` in headless mode.
 """
 from __future__ import annotations
 import sys
@@ -13,9 +14,9 @@ import importlib.resources as pkg_resources
 
 def _ensure_streamlit_config() -> None:
     """
-    Make sure a Streamlit config.toml exists so the app theme is consistent
-    even when running outside the repo root. If ./.streamlit doesn't exist,
-    fall back to ~/.streamlit.
+    Ensure a Streamlit config.toml exists so the app theme is consistent.
+
+    If ./.streamlit doesn't exist, fall back to ~/.streamlit.
     """
     try:
         cwd_cfg = Path(".streamlit") / "config.toml"
@@ -33,7 +34,7 @@ def main() -> None:
     """
     Launch the Streamlit application for OPCAL-MLT.
 
-    This function constructs the absolute path to the main application file,
+    Constructs the absolute path to the main application file,
     overrides `sys.argv` to mimic running `streamlit run main.py` from the CLI,
     and calls the Streamlit CLI main function in headless mode.
     """

@@ -1,4 +1,10 @@
-"""Streamlit entry point orchestrating routing, layout, and services."""
+"""
+Application Entry Point
+======================
+
+Streamlit entry point orchestrating routing, layout, and services for OPCAL-Labeler.
+Handles page configuration, service initialization, and main application flow.
+"""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -27,11 +33,23 @@ from opcal_mlt.services.sessions import SessionService
 APP_NAME = "OPCAL-Labeler"
 APP_VERSION = "1.0.0-rc1"
 STAGE_FLOW = [Stage.START, Stage.INGEST, Stage.WORKSPACE, Stage.EXPORT]
+ASSETS_DIR = Path(__file__).parent / "assets"
+DEFAULT_ICON = ASSETS_DIR / "logo.png"
 
 
 def run() -> None:
-    """Render the full Streamlit application."""
-    st.set_page_config(page_title=APP_NAME, layout="wide", initial_sidebar_state="expanded")
+    """
+    Render the full Streamlit application.
+
+    Sets up page configuration, initializes services, applies theme, and manages routing.
+    """
+    page_icon = str(DEFAULT_ICON) if DEFAULT_ICON.exists() else None
+    st.set_page_config(
+        page_title=APP_NAME,
+        layout="wide",
+        initial_sidebar_state="expanded",
+        page_icon=page_icon,
+    )
 
     state = StateAdapter(st.session_state)
     services = {
@@ -42,6 +60,7 @@ def run() -> None:
     }
 
     _initialize_state()
+    _apply_stage_from_query(state)
 
     theme = get_theme(state.get("theme", "Light"))
     inject_theme_css(theme)
@@ -57,8 +76,9 @@ def run() -> None:
     )
 
     stage = state.get_stage()
+    _ensure_query_stage(stage)
     if stage == Stage.WORKSPACE and _workspace_data_missing():
-        state.set_stage(Stage.INGEST)
+        _set_stage(state, Stage.INGEST)
         stage = Stage.INGEST
 
     render_stepper_and_tips(_stage_index(stage) + 1)
@@ -185,7 +205,7 @@ def _render_navigation(state: StateAdapter, session_service: SessionService) -> 
         st.markdown('<div class="btn-nav btn-lg">', unsafe_allow_html=True)
         if st.button("Back", key="nav_back", use_container_width=True, disabled=(idx <= 0)):
             prev_stage = STAGE_FLOW[max(0, idx - 1)]
-            state.set_stage(prev_stage)
+            _set_stage(state, prev_stage)
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -199,7 +219,7 @@ def _render_navigation(state: StateAdapter, session_service: SessionService) -> 
             disabled = not bool(readiness.get(stage, False))
             if st.button("Next", key="nav_next", type="primary", use_container_width=True, disabled=disabled):
                 next_stage = STAGE_FLOW[min(len(STAGE_FLOW) - 1, idx + 1)]
-                state.set_stage(next_stage)
+                _set_stage(state, next_stage)
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -221,6 +241,47 @@ def _reset_for_new_session(state: StateAdapter) -> None:
         st.session_state.pop(key, None)
     st.session_state.setdefault("traces", None)
     st.session_state.setdefault("cell_ids", None)
+    _set_stage(state, Stage.START)
+
+
+def _apply_stage_from_query(state: StateAdapter) -> None:
+    query_stage = _read_stage_from_query()
+    if query_stage is not None and state.get_stage() != query_stage:
+        state.set_stage(query_stage)
+
+
+def _read_stage_from_query() -> Stage | None:
+    params = st.query_params
+    value = params.get("stage")
+    if isinstance(value, list):
+        value = value[0] if value else None
+    if not value:
+        return None
+    value = value.lower()
+    mapping = {
+        "start": Stage.START,
+        "ingest": Stage.INGEST,
+        "workspace": Stage.WORKSPACE,
+        "export": Stage.EXPORT,
+    }
+    return mapping.get(value)
+
+
+def _ensure_query_stage(stage: Stage) -> None:
+    desired = stage.name.lower()
+    qp = st.query_params
+    current = qp.get("stage")
+    if isinstance(current, list):
+        current = current[0] if current else None
+    if current == desired:
+        return
+    qp["stage"] = desired
+
+
+def _set_stage(state: StateAdapter, stage: Stage) -> None:
+    if state.get_stage() != stage:
+        state.set_stage(stage)
+    _ensure_query_stage(stage)
 
 
 if __name__ == "__main__":

@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 """
-Feature extraction utilities for OPCAL‑Labeler.
+Feature Extraction Utilities
+===========================
 
-This module intentionally keeps a small, transparent set of descriptive
-statistics that are fast to compute and easy to interpret by annotators.
+Feature extraction and labeling summary utilities for OPCAL‑Labeler.
+Includes descriptive statistics and aggregation functions for calcium traces and label maps.
+All features are designed to be fast, interpretable, and robust for research workflows.
 """
 
 from typing import Dict
@@ -18,28 +20,25 @@ def basic_features(
     fs_hz: float,
     peaks_idx: np.ndarray,
 ) -> Dict[str, float]:
-    """Compute a concise set of features for a single calcium trace.
+    """
+    Compute a concise set of features for a single calcium trace.
 
-    Parameters
-    ----------
-    x : np.ndarray
-        1D array (T,) of the (optionally smoothed) calcium trace.
-    thr : np.ndarray
-        1D array (T,) of the per‑sample threshold; same length as ``x``.
-    fs_hz : float
-        Sampling rate in Hertz.
-    peaks_idx : np.ndarray
-        1D integer array of peak sample indices (as from ``scipy.signal.find_peaks``).
+    Args:
+        x (np.ndarray): 1D array (T,) of the (optionally smoothed) calcium trace.
+        thr (np.ndarray): 1D array (T,) of the per-sample threshold; same length as ``x``.
+        fs_hz (float): Sampling rate in Hertz.
+        peaks_idx (np.ndarray): 1D integer array of peak sample indices (as from ``scipy.signal.find_peaks``).
 
-    Returns
-    -------
-    Dict[str, float]
-        A dictionary with:
-        - ``mean`` – arithmetic mean of ``x`` (NaN‑safe)
-        - ``std`` – standard deviation of ``x`` (NaN‑safe)
-        - ``rms`` – root‑mean‑square of ``x`` (NaN‑safe)
-        - ``frac_above_thr`` – fraction of samples with ``x > thr``
-        - ``peaks_per_min`` – number of peaks normalized per minute
+    Returns:
+        Dict[str, float]: Dictionary of computed features:
+            - mean: Arithmetic mean of ``x`` (NaN-safe)
+            - std: Standard deviation of ``x`` (NaN-safe)
+            - rms: Root-mean-square of ``x`` (NaN-safe)
+            - frac_above_thr: Fraction of samples with ``x > thr``
+            - peaks_per_min: Number of peaks normalized per minute
+
+    Notes:
+        All statistics are NaN-safe and robust to empty input.
     """
 
     T = int(x.size)
@@ -57,7 +56,7 @@ def basic_features(
     if thr.shape != x.shape:
         thr = np.broadcast_to(thr, x.shape)
 
-    dur_min = T / fs_hz / 60.0
+    dur_min = T / fs_hz / 60.0  # Duration in minutes
     peaks_per_min = float(np.size(peaks_idx)) / max(1e-9, dur_min)
 
     # NaN‑safe statistics (ignore NaNs if present)
@@ -85,26 +84,22 @@ def summarize_labels(
     cell_ids: _List[str] | None = None,
     total_cells: int | None = None,
 ) -> _Tuple[_pd.DataFrame, _pd.DataFrame]:
-    """Create a per-cell labels table and per-class statistics.
+    """
+    Create a per-cell labels table and per-class statistics.
 
-    Parameters
-    ----------
-    label_map : dict
-        Mapping: cell_index -> {"label": str, "notes": str, ...}
-    cell_ids : list[str] | None
-        Optional cell id list (same order as traces columns). If provided,
-        it's included in the returned table.
-    total_cells : int | None
-        If given, percentages are computed against this number. Otherwise the
-        denominator is the number of labeled cells.
+    Args:
+        label_map (dict): Mapping: cell_index -> {"label": str, "notes": str, ...}
+        cell_ids (list[str] | None): Optional cell id list (same order as traces columns). If provided, it's included in the returned table.
+        total_cells (int | None): If given, percentages are computed against this number. Otherwise the denominator is the number of labeled cells.
 
-    Returns
-    -------
-    labels_df : DataFrame
-        One row per labeled cell: cell_index, cell_id (optional), label, notes, uncertain (if present).
+    Returns:
+        Tuple[DataFrame, DataFrame]:
+            labels_df: One row per labeled cell: cell_index, cell_id (optional), label, notes, uncertain (if present).
+            stats_df: Per-class count and percentage (0–100, rounded to 1 decimal place).
+
+    Notes:
         The "uncertain" column may be included if present in the label_map.
-    stats_df : DataFrame
-        Per-class count and percentage (0–100, rounded to 1 decimal place).
+        Handles empty input gracefully.
     """
     # Empty case
     if not label_map:
@@ -116,9 +111,11 @@ def summarize_labels(
     rows = []
     for ci, meta in label_map.items():
         ci_int = int(ci)
+        # Defensive check for cell_ids length and index validity
+        cell_id_val = (cell_ids[ci_int] if (cell_ids is not None and 0 <= ci_int < len(cell_ids)) else None)
         rows.append({
             "cell_index": ci_int,
-            "cell_id": (cell_ids[ci_int] if (cell_ids is not None and 0 <= ci_int < len(cell_ids)) else None),
+            "cell_id": cell_id_val,
             "label": str(meta.get("label", "")),
             "notes": str(meta.get("notes", "")),
             "uncertain": bool(meta.get("uncertain", False)),

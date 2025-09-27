@@ -1,4 +1,10 @@
-"""Typed wrapper around ``st.session_state`` to avoid stringly-typed access."""
+"""
+Session State Adapter
+====================
+
+Typed wrapper around ``st.session_state`` to avoid stringly-typed access.
+Provides strongly-typed helpers for managing Streamlit session state in OPCAL-Labeler.
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,7 +15,17 @@ from opcal_mlt.domain.models import LabelMap
 
 
 class StateAdapter:
-    """Expose strongly-typed helpers over Streamlit session state."""
+    """
+    Expose strongly-typed helpers over Streamlit session state.
+
+    Methods:
+        get_stage: Retrieve the current workflow stage.
+        set_stage: Set the workflow stage.
+        get_label_map: Retrieve the current label map.
+        update_label_map: Update the label map for a cell.
+        set_label_map_from_states: Set the label map from label states.
+        ... (additional session and workspace management methods)
+    """
 
     def __init__(self, backing: MutableMapping[str, Any]) -> None:
         self._state = backing

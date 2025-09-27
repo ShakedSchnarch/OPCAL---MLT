@@ -1,4 +1,10 @@
-"""Session lifecycle services (create, resume, hydrate)."""
+"""
+Session Service
+===============
+
+Provides high-level orchestration for session lifecycle management, including creation, resumption, hydration, and metadata handling.
+Handles session folders, CSV artifacts, and summary operations for electrophysiological labeling workflows.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -23,13 +29,30 @@ from opcal_mlt.domain.models import (
 
 @dataclass(slots=True)
 class SessionContext:
+    """
+    Context object for a session, containing configuration, paths, and recording ID.
+
+    Attributes:
+        config (SessionConfig): Session configuration.
+        paths (SessionPaths): Paths relevant to the session.
+        recording_id (str): Identifier for the recording.
+    """
     config: SessionConfig
     paths: SessionPaths
     recording_id: str
 
 
 class SessionService:
-    """High-level orchestration around session folders and CSV artifacts."""
+    """
+    Service for managing session lifecycle, folders, and CSV artifacts.
+
+    Methods:
+        start: Create a new session and initialize metadata.
+        hydrate_labels: Load label map from session CSV.
+        hydrate_cell_ids: Load cell IDs from session CSV.
+        list_resumable_sessions: List resumable sessions in a save root.
+        load_session: Load a session and its metadata.
+    """
 
     def start(
         self,
@@ -38,6 +61,17 @@ class SessionService:
         *,
         metadata: Optional[dict] = None,
     ) -> SessionContext:
+        """
+        Create a new session and initialize its metadata and folder structure.
+
+        Args:
+            config (SessionConfig): Session configuration.
+            recording_id (str): Identifier for the recording.
+            metadata (Optional[dict]): Optional metadata for session header.
+
+        Returns:
+            SessionContext: Context object for the created session.
+        """
         session_dir = make_session_dir(config.save_root, recording_id, config.annotator_id)
         paths = SessionPaths(base_dir=session_dir.parent, session_dir=session_dir)
         header = metadata.copy() if metadata else {}
@@ -53,6 +87,15 @@ class SessionService:
         return SessionContext(config=config, paths=paths, recording_id=recording_id)
 
     def hydrate_labels(self, session_dir: Path) -> LabelMap:
+        """
+        Load label map from the session's labels.csv file.
+
+        Args:
+            session_dir (Path): Path to the session directory.
+
+        Returns:
+            LabelMap: Dictionary mapping cell indices to label states.
+        """
         labels_csv = session_dir / "labels.csv"
         if not labels_csv.exists():
             return {}
@@ -73,6 +116,15 @@ class SessionService:
         return build_label_map(records)
 
     def hydrate_cell_ids(self, session_dir: Path) -> Optional[list[str]]:
+        """
+        Load cell IDs from the session's cell_map.csv file.
+
+        Args:
+            session_dir (Path): Path to the session directory.
+
+        Returns:
+            Optional[list[str]]: List of cell IDs, or None if not found.
+        """
         cell_map_csv = session_dir / "cell_map.csv"
         if not cell_map_csv.exists():
             return None
@@ -80,6 +132,16 @@ class SessionService:
         return [str(x) for x in df_map["cell_id"].tolist()]
 
     def list_resumable_sessions(self, save_root: Path, limit: int = 5) -> List[SessionSummary]:
+        """
+        List resumable sessions in the given save root directory.
+
+        Args:
+            save_root (Path): Path to the root directory containing session folders.
+            limit (int): Maximum number of sessions to return.
+
+        Returns:
+            List[SessionSummary]: List of session summaries sorted by last modified.
+        """
         save_root = Path(save_root).expanduser()
         if not save_root.exists():
             return []
@@ -97,6 +159,18 @@ class SessionService:
         return candidates[:limit]
 
     def load_session(self, session_dir: Path) -> LoadedSession:
+        """
+        Load a session and its metadata from the given directory.
+
+        Args:
+            session_dir (Path): Path to the session directory.
+
+        Returns:
+            LoadedSession: Loaded session object with label map, cell IDs, and metadata.
+
+        Raises:
+            FileNotFoundError: If the session directory does not exist.
+        """
         session_dir = Path(session_dir)
         if not session_dir.exists():
             raise FileNotFoundError(f"Session directory not found: {session_dir}")
@@ -107,6 +181,15 @@ class SessionService:
 
     # ------------------------------------------------------------------
     def _summarize_session(self, session_dir: Path) -> Optional[SessionSummary]:
+        """
+        Summarize a session by counting labels and determining last modification time.
+
+        Args:
+            session_dir (Path): Path to the session directory.
+
+        Returns:
+            Optional[SessionSummary]: Summary object or None if not found.
+        """
         labels_csv = session_dir / "labels.csv"
         session_csv = session_dir / "session.csv"
         if not labels_csv.exists() and not session_csv.exists():
@@ -127,6 +210,15 @@ class SessionService:
         )
 
     def _safe_count_rows(self, path: Path) -> int:
+        """
+        Safely count the number of rows in a CSV file.
+
+        Args:
+            path (Path): Path to the CSV file.
+
+        Returns:
+            int: Number of rows, or 0 if an error occurs.
+        """
         try:
             df = pd.read_csv(path)
             return int(len(df))
@@ -134,6 +226,15 @@ class SessionService:
             return 0
 
     def _read_session_metadata(self, session_dir: Path) -> dict:
+        """
+        Read session metadata from the session.csv file.
+
+        Args:
+            session_dir (Path): Path to the session directory.
+
+        Returns:
+            dict: Dictionary of session metadata, or empty dict if not found or error.
+        """
         session_csv = session_dir / "session.csv"
         if not session_csv.exists():
             return {}

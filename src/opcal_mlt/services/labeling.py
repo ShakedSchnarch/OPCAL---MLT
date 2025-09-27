@@ -1,4 +1,10 @@
-"""Label persistence and feature calculation."""
+"""
+Labeling Service
+===============
+
+Handles label persistence and feature calculation for electrophysiological signal analysis.
+Provides methods to save labels, calculate features, and store peak information for downstream analysis.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -16,12 +22,24 @@ from opcal_mlt.domain.models import LabelRecord, LabelState, PeakRecord, TraceSe
 
 @dataclass(slots=True)
 class LabelSaveResult:
+    """
+    Result object for label saving operations.
+
+    Attributes:
+        label_state (LabelState): The saved label state.
+        peaks (Sequence[int]): Indices of detected peaks.
+    """
     label_state: LabelState
     peaks: Sequence[int]
 
 
 class LabelingService:
-    """Encapsulate the workflow of saving a label and derived peaks."""
+    """
+    Service for saving labels and calculating derived features/peaks.
+
+    Methods:
+        save_label: Saves a label and its associated peaks, computes features, and persists results.
+    """
 
     def save_label(
         self,
@@ -39,6 +57,26 @@ class LabelingService:
         annotator_id: str,
         metadata: dict,
     ) -> LabelSaveResult:
+        """
+        Save a label and its derived peaks, compute features, and persist results to disk.
+
+        Args:
+            session_dir (Path): Path to the session directory for saving results.
+            trace_set (TraceSet): The trace set containing signal data and metadata.
+            cell_index (int): Index of the cell being labeled.
+            smoothed_trace (np.ndarray): Smoothed signal trace.
+            threshold (np.ndarray): Threshold array for peak detection.
+            peaks (Sequence[int]): Indices of detected peaks.
+            label (LabelClass): Label assigned to the cell.
+            notes (str): Free-text notes for the label.
+            uncertain (bool): Whether the label is marked as uncertain.
+            recording_id (str): Identifier for the recording.
+            annotator_id (str): Identifier for the annotator.
+            metadata (dict): Additional metadata for filtering and baseline methods.
+
+        Returns:
+            LabelSaveResult: Object containing the saved label state and peak indices.
+        """
         saved_utc = datetime.now(timezone.utc)
         feats = basic_features(smoothed_trace, threshold, trace_set.fs_hz, np.asarray(peaks, dtype=int))
         record = LabelRecord(

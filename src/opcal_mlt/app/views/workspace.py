@@ -1,4 +1,14 @@
-"""Streamlit page: Step 3 — labeling workspace."""
+"""
+Step 3 — Labeling Workspace
+===========================
+
+This module implements the third step of the labeling workflow in the OPCAL MLT tool.
+Users interact with the workspace to label traces, navigate cells, and adjust parameters.
+
+Functions:
+    render: Main entry point for the Streamlit page.
+    _render_label_controls: UI for labeling controls and actions.
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -19,12 +29,16 @@ from opcal_mlt.domain.models import TraceSet
 from opcal_mlt.services.labeling import LabelingService
 from opcal_mlt.services.logging import SessionLogger
 
-
 def render(
-    *,
-    state: StateAdapter,
-    labeling_service: LabelingService,
-) -> None:
+
+# ==== Main Page Renderer ====
+def render(*, state, labeling_service):
+    """Render the Step 3 Streamlit page for labeling workspace.
+
+    Args:
+        state: The application state adapter.
+        labeling_service: Service for labeling traces.
+    """
     s = st.session_state
     if not ensure_workspace_state(s):
         return
@@ -52,7 +66,6 @@ def render(
         cell_label = s.cell_ids[s.current_cell] if s.get("cell_ids") else s.current_cell
         st.markdown(f"### Cell <code>{cell_label}</code>", unsafe_allow_html=True)
         from opcal_mlt.app.plots import make_workspace_figure
-
         fig = make_workspace_figure(data, theme, dff_fixed=0.2, height=480)
         st.plotly_chart(fig, use_container_width=True)
 
@@ -79,22 +92,18 @@ def _render_label_controls(
 
     st.subheader("Label")
     label_options = [cls.value for cls in LabelClass]
-    default_index = label_options.index(st.session_state.get("workspace_label_value", LabelClass.default().value))
     label_choice = st.radio(
         "Class",
         label_options,
-        index=default_index,
         key="workspace_label_value",
     )
     uncertain = st.checkbox(
         "Mark as uncertain",
-        value=bool(st.session_state.get("workspace_uncertain_value", False)),
         key="workspace_uncertain_value",
         help="Flag this label as uncertain",
     )
     notes = st.text_area(
         "Notes",
-        value=st.session_state.get("workspace_notes_value", ""),
         key="workspace_notes_value",
         placeholder="Optional free text",
     )

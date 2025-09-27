@@ -1,4 +1,10 @@
-"""Router that dispatches to Streamlit pages based on the active stage."""
+"""
+Routing Utilities
+=================
+
+Router that dispatches to Streamlit pages based on the active stage in OPCAL-Labeler.
+Maintains a registry of render functions keyed by workflow stage.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,7 +23,13 @@ class Route:
 
 
 class Router:
-    """Maintain a registry of render functions keyed by Stage."""
+    """
+    Maintain a registry of render functions keyed by Stage.
+
+    Methods:
+        register: Register a render function for a workflow stage.
+        dispatch: Dispatch to the render function for the given stage.
+    """
 
     def __init__(self) -> None:
         self._routes: Dict[Stage, RenderFn] = {}
