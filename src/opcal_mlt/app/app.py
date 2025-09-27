@@ -30,7 +30,14 @@ def run() -> None:
     router.register(Stage.START, lambda: page_start.render(state=state, session_service=services["sessions"]))
     router.register(Stage.INGEST, lambda: page_ingest.render(state=state, ingest_service=services["ingest"]))
     router.register(Stage.WORKSPACE, lambda: page_workspace.render(state=state, labeling_service=services["labeling"]))
-    router.register(Stage.EXPORT, lambda: page_export.render(state=state, export_service=services["export"]))
+    router.register(
+        Stage.EXPORT,
+        lambda: page_export.render(
+            state=state,
+            session_service=services["sessions"],
+            export_service=services["export"],
+        ),
+    )
     router.dispatch(state.get_stage())
 
 

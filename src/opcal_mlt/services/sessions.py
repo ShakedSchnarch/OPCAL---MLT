@@ -2,14 +2,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import pandas as pd
 
 from opcal_mlt.app.session_io import make_session_dir, now_utc_iso, write_session_header
 from opcal_mlt.domain.enums import LabelClass
-from opcal_mlt.domain.models import LabelMap, LabelState, SessionConfig, SessionPaths, build_label_map
+from opcal_mlt.domain.models import (
+    LabelMap,
+    LabelState,
+    LoadedSession,
+    SessionConfig,
+    SessionPaths,
+    SessionSummary,
+    build_label_map,
+)
 
 
 @dataclass(slots=True)
@@ -66,6 +75,73 @@ class SessionService:
             return None
         df_map = pd.read_csv(cell_map_csv).sort_values("cell_index")
         return [str(x) for x in df_map["cell_id"].tolist()]
+
+    def list_resumable_sessions(self, save_root: Path, limit: int = 5) -> List[SessionSummary]:
+        save_root = Path(save_root).expanduser()
+        if not save_root.exists():
+            return []
+        candidates: List[SessionSummary] = []
+        for recording_dir in save_root.iterdir():
+            if not recording_dir.is_dir():
+                continue
+            for session_dir in recording_dir.iterdir():
+                if not session_dir.is_dir():
+                    continue
+                summary = self._summarize_session(session_dir)
+                if summary:
+                    candidates.append(summary)
+        candidates.sort(key=lambda item: item.last_modified, reverse=True)
+        return candidates[:limit]
+
+    def load_session(self, session_dir: Path) -> LoadedSession:
+        session_dir = Path(session_dir)
+        if not session_dir.exists():
+            raise FileNotFoundError(f"Session directory not found: {session_dir}")
+        label_map = self.hydrate_labels(session_dir)
+        cell_ids = self.hydrate_cell_ids(session_dir)
+        metadata = self._read_session_metadata(session_dir)
+        return LoadedSession(session_dir=session_dir, label_map=label_map, cell_ids=cell_ids, metadata=metadata)
+
+    # ------------------------------------------------------------------
+    def _summarize_session(self, session_dir: Path) -> Optional[SessionSummary]:
+        labels_csv = session_dir / "labels.csv"
+        session_csv = session_dir / "session.csv"
+        if not labels_csv.exists() and not session_csv.exists():
+            return None
+        labels_count = 0
+        last_modified_ts: float = 0.0
+        if labels_csv.exists():
+            labels_count = self._safe_count_rows(labels_csv)
+            last_modified_ts = labels_csv.stat().st_mtime
+        elif session_csv.exists():
+            last_modified_ts = session_csv.stat().st_mtime
+        recording_id = session_dir.parent.name
+        return SessionSummary(
+            session_dir=session_dir,
+            recording_id=recording_id,
+            labels_count=labels_count,
+            last_modified=datetime.fromtimestamp(last_modified_ts),
+        )
+
+    def _safe_count_rows(self, path: Path) -> int:
+        try:
+            df = pd.read_csv(path)
+            return int(len(df))
+        except Exception:
+            return 0
+
+    def _read_session_metadata(self, session_dir: Path) -> dict:
+        session_csv = session_dir / "session.csv"
+        if not session_csv.exists():
+            return {}
+        try:
+            df = pd.read_csv(session_csv)
+            if df.empty:
+                return {}
+            row = df.iloc[-1].to_dict()
+            return {k: ("" if pd.isna(v) else v) for k, v in row.items()}
+        except Exception:
+            return {}
 
 
 __all__ = ["SessionService", "SessionContext"]

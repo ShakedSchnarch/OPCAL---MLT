@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Iterable, List, Mapping, Optional
+from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 import numpy as np
 
@@ -110,6 +110,26 @@ class WorkspaceSnapshot:
     stage: Stage = Stage.WORKSPACE
 
 
+@dataclass(slots=True, kw_only=True)
+class SessionSummary:
+    """Lightweight descriptor used when listing resumable sessions."""
+
+    session_dir: Path
+    recording_id: str
+    labels_count: int
+    last_modified: datetime
+
+
+@dataclass(slots=True, kw_only=True)
+class LoadedSession:
+    """Full session payload returned when hydrating from disk."""
+
+    session_dir: Path
+    label_map: LabelMap
+    cell_ids: Optional[List[str]]
+    metadata: Mapping[str, Any]
+
+
 def build_label_map(records: Iterable[LabelState]) -> LabelMap:
     """Create a lookup map from an iterable of label states."""
 
@@ -127,6 +147,8 @@ __all__ = [
     "LabelRecord",
     "PeakRecord",
     "WorkspaceSnapshot",
+    "SessionSummary",
+    "LoadedSession",
     "LabelMap",
     "build_label_map",
 ]

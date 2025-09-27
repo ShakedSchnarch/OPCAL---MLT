@@ -6,6 +6,7 @@ src/opcal_mlt/
 │   ├── app.py              # Streamlit entry point (replaces app/main.py)
 │   ├── routing.py          # Stage router
 │   ├── state.py            # Streamlit session_state adapter
+│   ├── theme.py            # Shared light/dark palettes
 │   ├── pages/              # Individual screens (start, ingest, workspace, export)
 │   └── components/         # Reusable UI pieces (navigation, diagnostics, forms)
 ├── domain/
@@ -15,7 +16,7 @@ src/opcal_mlt/
 ├── services/
 │   ├── ingest.py           # Loading traces + assigning IDs
 │   ├── labeling.py         # Persist labels/peaks, compute features
-│   ├── sessions.py         # Session lifecycle (start/resume/hydration)
+│   ├── sessions.py         # Session lifecycle (start/resume/hydration + listings)
 │   └── export.py           # ZIP export helpers
 └── core/
     └── ...                 # Signal processing + low-level I/O

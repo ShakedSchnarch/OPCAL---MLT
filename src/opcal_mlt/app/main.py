@@ -34,6 +34,7 @@ from opcal_mlt.app.session_io import (
     write_session_header,
 )
 from opcal_mlt.app.ui import inject_theme_css, render_stepper_and_tips
+from opcal_mlt.app.theme import get_theme
 
 # === Session State Initialization ===
 s = st.session_state
@@ -71,41 +72,6 @@ LABELS = [
 ]
 
 # === Theming (light / dark) ===
-THEMES = {
-    "Light": {
-        "bg": "#f7f9fb",
-        "panel": "#ffffff",
-        "border": "#e6edf3",
-        "text": "#111827",
-        "muted": "#6b7280",
-        "accent": "#2563eb",
-        "ok": "#2ca02c",
-        "warn": "#d97706",
-        "err": "#dc2626",
-        "shade_pre": "rgba(0,160,0,0.14)",
-        "shade_post": "rgba(200,0,0,0.14)",
-        "status_unlabeled": "#d1d5db",
-        "status_labeled": "#2ca02c",
-        "plotly_tpl": "plotly_white",
-    },
-    "Dark": {
-        "bg": "#0f172a",
-        "panel": "#0b1220",
-        "border": "#1f2a44",
-        "text": "#e5e7eb",
-        "muted": "#9ca3af",
-        "accent": "#60a5fa",
-        "ok": "#34d399",
-        "warn": "#f59e0b",
-        "err": "#f87171",
-        "shade_pre": "rgba(16,185,129,0.16)",
-        "shade_post": "rgba(239,68,68,0.16)",
-        "status_unlabeled": "#334155",
-        "status_labeled": "#34d399",
-        "plotly_tpl": "plotly_dark",
-    },
-}
-
 # === Logging Utility ===
 def _log(msg: str):
     """Append a UTC‑timestamped message to the active session's log file (if any)."""
@@ -155,7 +121,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-inject_theme_css(THEMES[st.session_state.get("theme", "Light")])
+inject_theme_css(get_theme(st.session_state.get("theme", "Light")))
 
 # === Top Stepper (4 Stages) ===
 cur = int(s.get("stage", 1))
@@ -200,7 +166,7 @@ def _route_stage():
     elif s.stage == 2:
         render_upload_and_indexing(s=s)
     elif s.stage == 3:
-        theme = THEMES[st.session_state.get("theme", "Light")]
+        theme = get_theme(st.session_state.get("theme", "Light"))
         render_labeling_workspace(s=s, theme=theme, logger=_log)
     elif s.stage == 4:
         render_finish_export(st.session_state)
