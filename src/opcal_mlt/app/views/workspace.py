@@ -47,7 +47,7 @@ def render(*, state: StateAdapter, labeling_service: LabelingService) -> None:
     theme_name = state.get("theme", "Light")
     theme = get_theme(theme_name)
 
-    render_sidebar_params(s)
+    render_sidebar_params(state)
     traces = getattr(s, "traces", None)
     if traces is None:
         st.warning("No traces loaded. Return to Upload step.")

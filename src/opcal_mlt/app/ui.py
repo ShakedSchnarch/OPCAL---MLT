@@ -65,9 +65,30 @@ def inject_theme_css(palette: dict) -> None:
     [data-testid="stSidebar"] {
       background: var(--panel) !important;
       border-right: 1px solid var(--border);
+      transform: none !important;
+      opacity: 1 !important;
+      pointer-events: auto !important;
+      visibility: visible !important;
+      display: block !important;
+      width: 320px !important;
+      min-width: 300px !important;
+      max-width: 360px !important;
+      padding: 0 !important;
+      overflow-y: auto !important;
     }
-    [data-testid="stSidebarCollapseButton"] {
-      display: flex !important;
+    [data-testid="stSidebarContent"],
+    [data-testid="stSidebar"] > div:first-child {
+      padding: 1.5rem 1.1rem 2rem !important;
+      gap: 1rem !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+      gap: 0.85rem !important;
+    }
+    [data-testid="stSidebarCollapseButton"],
+    [data-testid="collapsedControl"],
+    button[aria-label="Toggle sidebar"],
+    button[title="Toggle sidebar"] {
+      display: none !important;
     }
 
     [data-testid="stStatusWidget"], #MainMenu, footer { visibility: hidden !important; }

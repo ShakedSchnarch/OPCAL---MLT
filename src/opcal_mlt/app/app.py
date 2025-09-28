@@ -10,9 +10,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict
+from uuid import uuid4
 
 import streamlit as st
 
+from opcal_mlt.app.state_store import load_snapshot, resolve_cache_dir
 from opcal_mlt.app.views import export as page_export
 from opcal_mlt.app.views import ingest as page_ingest
 from opcal_mlt.app.views import start as page_start
@@ -35,6 +37,7 @@ APP_VERSION = "1.0.0-rc1"
 STAGE_FLOW = [Stage.START, Stage.INGEST, Stage.WORKSPACE, Stage.EXPORT]
 ASSETS_DIR = Path(__file__).parent / "assets"
 DEFAULT_ICON = ASSETS_DIR / "logo.png"
+SESSION_TOKEN_PARAM = "session"
 
 
 def run() -> None:
@@ -50,6 +53,9 @@ def run() -> None:
         initial_sidebar_state="expanded",
         page_icon=page_icon,
     )
+
+    session_token = _ensure_session_token()
+    _hydrate_from_persistence(session_token)
 
     state = StateAdapter(st.session_state)
     services = {
@@ -259,10 +265,7 @@ def _apply_stage_from_query(state: StateAdapter) -> None:
 
 def _read_stage_from_query() -> Stage | None:
     """Parse the ``?stage`` query parameter into a ``Stage`` enum."""
-    params = st.query_params
-    value = params.get("stage")
-    if isinstance(value, list):
-        value = value[0] if value else None
+    value = _read_query_param("stage")
     if not value:
         return None
     value = value.lower()
@@ -278,15 +281,7 @@ def _read_stage_from_query() -> Stage | None:
 def _ensure_query_stage(stage: Stage) -> None:
     """Synchronise the ``stage`` query parameter with the active stage."""
     desired = stage.name.lower()
-    qp_proxy = st.query_params
-    current = qp_proxy.get("stage")
-    if isinstance(current, list):
-        current = current[0] if current else None
-    if current == desired:
-        return
-    new_params = dict(qp_proxy)
-    new_params["stage"] = desired
-    st.query_params = new_params
+    _ensure_query_param("stage", desired)
 
 
 def _set_stage(state: StateAdapter, stage: Stage) -> None:
@@ -294,6 +289,68 @@ def _set_stage(state: StateAdapter, stage: Stage) -> None:
     if state.get_stage() != stage:
         state.set_stage(stage)
     _ensure_query_stage(stage)
+
+
+def _ensure_query_param(key: str, desired: str) -> None:
+    """Ensure the query parameter ``key`` is set to ``desired``."""
+    if not desired:
+        return
+    qp_proxy = st.query_params
+    current = qp_proxy.get(key)
+    if isinstance(current, list):
+        current = current[0] if current else None
+    if current == desired:
+        return
+    new_params = dict(qp_proxy)
+    new_params[key] = desired
+    st.query_params = new_params
+
+
+def _read_query_param(key: str) -> str | None:
+    """Return the first value for a query parameter if present."""
+    value = st.query_params.get(key)
+    if isinstance(value, list):
+        return value[0] if value else None
+    return value
+
+
+def _ensure_session_token() -> str:
+    """Ensure a stable session token exists and is reflected in the URL."""
+    qp_token = _read_query_param(SESSION_TOKEN_PARAM)
+    state_token = st.session_state.get("session_token")
+
+    if qp_token and state_token and qp_token != state_token:
+        state_token = qp_token
+    if not state_token:
+        state_token = qp_token or uuid4().hex
+
+    st.session_state["session_token"] = state_token
+    _ensure_query_param(SESSION_TOKEN_PARAM, state_token)
+    return state_token
+
+
+def _hydrate_from_persistence(token: str) -> None:
+    """Hydrate ``st.session_state`` from disk if a snapshot exists."""
+    if not token:
+        return
+
+    cache_root = resolve_cache_dir(token)
+    _apply_snapshot_if_present(cache_root)
+
+    session_dir = st.session_state.get("session_dir")
+    if session_dir:
+        _apply_snapshot_if_present(Path(session_dir))
+
+
+def _apply_snapshot_if_present(root: Path) -> None:
+    """Load a snapshot from ``root`` and merge it into ``st.session_state``."""
+    snapshot = load_snapshot(root)
+    if snapshot is None:
+        return
+    for key, value in snapshot.data.items():
+        st.session_state[key] = value
+    if snapshot.traces is not None:
+        st.session_state["traces"] = snapshot.traces
 
 
 if __name__ == "__main__":

@@ -138,7 +138,7 @@ Core unit suites live in `tests/unit/` and focus on domain/services correctness.
 1. Align version strings (`pyproject.toml`, `app/app.py::APP_VERSION`, docs).
 2. Update [docs/CHANGELOG.md](docs/CHANGELOG.md) with dated entries.
 3. Smoke-test the 4-step flow on representative data (CSV and NPZ).
-4. Bundle a release ZIP via `scripts/build-macos-zip.sh` (if distributing binaries).
+4. Build platform bundles with `python tools/distribution/build.py` (see `docs/distribution.md`) and use `scripts/build-macos-zip.sh` only when a lightweight source ZIP is preferred.
 5. Tag the release in Git and attach the docs/demos requested by the team.
 
 ---
