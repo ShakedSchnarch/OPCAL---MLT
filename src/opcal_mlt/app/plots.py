@@ -23,24 +23,22 @@ def make_workspace_figure(
 ) -> go.Figure:
     """Build the main workspace figure.
 
-    Parameters
-    ----------
-    data : dict
-        Dictionary produced by the cell processing function, expected keys:
-        - "t", "x", "x_s", "base", "thr", "peaks" (np.ndarray/arrays)
-        - "smooth", "show_raw", "show_smoothed" (bool)
-        - "stim_idx" (int)
-        - rectangle params: "rect_y0_pre", "rect_y1_pre", "rect_y0_post", "rect_y1_post"
-    theme : dict
-        Palette with keys used for shading/lines.
-    dff_fixed : float, default 0.2
-        Horizontal ΔF/F reference line value.
-    height : int, default 480
-        Figure height in pixels.
+    Args:
+        data: Dictionary produced by the cell processing function. Expected keys include
+            "t", "x", "x_s", "base", "thr", "peaks" (NumPy arrays) and flags
+            such as "smooth", "show_raw", "show_smoothed". When available, provide
+            "stim_idx" and rectangle parameters ("rect_y0_pre", "rect_y1_pre",
+            "rect_y0_post", "rect_y1_post").
+        theme: Palette dictionary providing Plotly colors for traces and shaded regions.
+        dff_fixed: Horizontal ΔF/F reference line value.
+        height: Figure height in pixels.
 
-    Notes
-    -----
-    This builder is defensive: shapes/peaks are skipped gracefully when inputs are missing.
+    Returns:
+        go.Figure: Configured Plotly figure for the labeling workspace.
+
+    Notes:
+        The builder is defensive: shapes and peaks are skipped gracefully when inputs
+        are missing or inconsistent.
     """
     fig = go.Figure()
 
@@ -141,7 +139,16 @@ def make_workspace_figure(
 
 
 def make_status_figure(status: np.ndarray, theme: Dict, *, height: int = 90) -> go.Figure:
-    """Build the mini status strip used under the cell selector."""
+    """Build the mini status strip displayed beneath the cell selector.
+
+    Args:
+        status: Binary array indicating whether each cell is labeled.
+        theme: Palette dictionary providing bar colors.
+        height: Figure height in pixels.
+
+    Returns:
+        go.Figure: Plotly bar chart summarising label completion.
+    """
     colors = [theme.get("status_unlabeled"), theme.get("status_labeled")]
     fig = go.Figure(
         go.Bar(

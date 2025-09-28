@@ -1,188 +1,159 @@
-# OPCAL‑MLT — Manual Labeling Tool
+# OPCAL‑MLT · Manual Labeling Tool
 
-A lightweight Streamlit application for manual labeling of calcium imaging traces (ΔF/F) with baseline and stimulus-aligned utilities.
-> **Version:** **v1.0.0**
----
+<p align="center">
+  <img src="src/opcal_mlt/app/assets/logo.png" alt="OPCAL-MLT logo" width="140" />
+</p>
 
-## Table of contents
-
-- [OPCAL‑MLT — Manual Labeling Tool](#opcalmlt--manual-labeling-tool)
-  - [Table of contents](#table-of-contents)
-  - [Overview](#overview)
-  - [Key features](#key-features)
-  - [Installation](#installation)
-  - [Quick start](#quick-start)
-  - [Data inputs \& assumptions](#data-inputs--assumptions)
-  - [Workflow](#workflow)
-  - [STD rectangles: pre vs post](#std-rectangles-pre-vs-post)
-  - [Project structure](#project-structure)
-  - [Development](#development)
-    - [Code style \& docs](#code-style--docs)
-  - [Releases \& versioning](#releases--versioning)
-  - [Troubleshooting](#troubleshooting)
-  - [FAQ](#faq)
-  - [License](#license)
-    - [Changelog (pointer)](#changelog-pointer)
+> Lightweight Streamlit workspace for labeling calcium imaging (ΔF/F) traces with baseline-aware visualization and reproducible exports.
 
 ---
 
-## Overview
+## Quick links
 
-OPCAL‑MLT is a manual labeling tool for trace data where the user defines event labels around a known stimulus time. The app emphasizes clear visualization of baseline vs. ΔF/F, consistent STD bands, and simple export of labels.
+- [User guide](docs/USER_GUIDE.md) — full walkthrough for annotators
+- [Quickstart](docs/quickstart.md) — five-minute setup + first labels
+- [Data & API contracts](docs/API.md) — CSV schemas, metadata fields, helpers
+- [Architecture](docs/architecture.md) — layer-by-layer tour for contributors
+- [Testing playbook](docs/testing.md) — unit/integration/UI procedures
+- [Data guide](docs/data/README.md) — storage layout & backup policy
+- [Research notes](docs/dev/summary_notes.md) — text summaries of PDF specs
+- [Changelog](docs/CHANGELOG.md) — release history and upgrade notes
 
-The codebase is split into `app/` (UI) and `core/` (signal utilities), striving for clear boundaries: UI renders; core computes.
+---
 
-## Key features
+## At a glance
 
-* Streamlined 4‑step flow (start → upload & index → label → finish & export).
-* Baseline + ΔF/F visualization with robust statistics.
-* **STD rectangles policy:** pre‑stimulus band (green) uses **k = 1**; post‑stimulus band (red) uses **k**.
-* Keyboard navigation for fast annotation (if enabled in screens).
-* Export labels to CSV within a session directory.
+| Capability | Details |
+| --- | --- |
+| Guided flow | Four stages (Start → Upload & indexing → Workspace → Finish & export) with persistent session state |
+| Visual policy | Pre-stimulus STD band fixed to 1·σ, post-stimulus band scales with `k`; thresholds stay consistent with detection logic |
+| Outputs | Deterministic CSV bundle (`session.csv`, `cell_map.csv`, `labels.csv`, `peaks.csv`) plus optional ZIP export |
+| Services | Typed domain + service layer for ingesting traces, saving labels, and exporting sessions |
+| Versioning | App UI reports `1.0.0-rc1`; package metadata currently `0.4.0` while the team finalises the stable release |
 
-## Installation
+---
 
-Using an editable install during development:
+## System overview
+
+```
+src/opcal_mlt/
+  app/           # Streamlit UI, routing, state adapter, theming, custom components
+  core/          # Signal processing helpers (preprocess, peaks, feature summaries)
+  domain/        # Enums and dataclasses used throughout the app
+  services/      # File-system aware facades (sessions, ingest, labeling, export)
+```
+
+Key concepts:
+- **StateAdapter** wraps `st.session_state` to keep the UI typed and testable.
+- **Router** binds workflow stages (`Stage.START → Stage.EXPORT`) to page render functions.
+- **SessionService** owns session directory creation, hydration, and listings.
+- **LabelingService** persists labels/peaks and computes summary features, all routed through `session_io` helpers to guarantee CSV schemas.
+
+---
+
+## Prerequisites
+
+- Python **3.12** (match the version declared in `pyproject.toml`)
+- Install dependencies via `requirements.txt` **or** the Conda `environment.yml`
+- Node/JS is **not** required; Streamlit bundles its own frontend
+- (Optional) `watchdog` package speeds up Streamlit autoreload on macOS/Linux
+
+---
+
+## Local setup
 
 ```bash
-# From repo root
+# Option A — venv + pip
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -U pip
+pip install -r requirements-dev.txt
+
+# Option B — Conda environment
+conda env create -f environment.yml
+conda activate opcal-mlt
+
+# Editable install for contributors
 pip install -e .
-```
 
-Run the app:
-
-```bash
+# Launch the app (two equivalent options)
 opcal-mlt
 # or
 python -m opcal_mlt.app.main
 ```
 
-Default URL: `http://localhost:8501`
+Default Streamlit address: `http://localhost:8501`
 
-## Quick start
-
-1. **Start session** — choose/create a working session.
-2. **Upload & indexing** — load traces (`.npy`/`.csv`) and IDs; the app validates shapes and types.
-3. **Label files** — browse cells, adjust stimulus parameters, add labels.
-4. **Finish & export** — write labels to disk (`labels.csv` in the session folder).
-
-## Data inputs & assumptions
-
-* **Traces**: 2D array `[n_cells, n_samples]` (`float32` recommended).
-* **Cell IDs**: 1D array/list of length `n_cells` (string/int).
-* **Time**: either provided or inferred by sampling rate.
-* **Stimulus time (seconds)**: used to split pre/post segments.
-
-## Workflow
-
-* Baseline is computed using a consistent method (rolling median or percentile) on the pre segment unless otherwise specified.
-* ΔF/F is shown relative to baseline.
-* A constant threshold can be derived as `baseline + k·STD_pre`; bands are drawn to guide the eye (see policy below).
-
-## STD rectangles: pre vs post
-
-To improve interpretability and match review policy:
-
-* **Pre (green)**: band height = `baseline + 1·STD_pre` (i.e., **k = 1**).
-* **Post (red)**: band height = `baseline + k·STD_post` (i.e., user‑controlled **k**).
-
-> Note: Threshold logic may continue to use `baseline + k·STD_pre` for detection consistency; the rectangles are a visual aid and should not double‑apply `k`.
-
-## Project structure
-
-```
-src/opcal_mlt/
-  app/
-    app.py           # Primary Streamlit runner (routing + layout + services)
-    main.py          # Compatibility shim → simply imports and runs app.run()
-    state.py         # Typed adapter around st.session_state
-    routing.py       # Stage → page dispatcher
-    theme.py         # Shared light/dark palettes + CSS injection helpers
-    components/      # UI widgets (diagnostics, navigation, sidebar)
-    views/           # start.py, ingest.py, workspace.py, export.py (Streamlit views routed internally)
-    session_io.py    # CSV helpers (session header, labels.csv, etc.)
-    plots.py         # Plotly figure builders (no Streamlit imports)
-    workspace_logic.py # Deterministic processing for the labeling view
-  core/
-    preprocess.py    # Signal utilities (smoothing, baseline, robust SD)
-    peaks.py         # Peak detection helpers
-    features.py      # Feature extraction + label summaries
-    io.py            # Trace loading helpers
-  domain/            # Dataclasses + enums (SessionConfig, TraceSet, LabelClass, ...)
-  services/          # Session/Ingest/Labeling/Export facades used by the UI layer
-```
-
-## Development
-
-* Use `release/vX.Y` branches for release prep.
-* Page functions follow the convention `render(*, state, …)` and are wired via `app.routing.Router`.
-* Keep plotting code inside `app/plots.py`; Streamlit pages should stay lightweight and call into services/domain layers for side-effects.
-* Avoid circular imports by keeping `theme.py`/`ui.py` free of page-level imports.
-
-### Code style & docs
-
-* Short docstrings (English) for public helpers.
-* Remove unused imports; prefer explicit, minimal dependencies in UI files.
-* Preserve existing visual design unless a change is explicitly approved.
-
-## Releases & versioning
-
-* Prepare a release branch: `git checkout -b release/v1.0`.
-* Update `APP_VERSION` in `app/app.py` when finalizing.
-* Add a `CHANGELOG.md` entry summarizing user-visible changes (see below).
-
-**v1.0 highlights (planned):**
-
-* Streamlit app refactored into modular pages + services under `app/`.
-* Typed domain layer (`domain/models.py`) and service facades power all I/O.
-* Simplified test tree (`tests/unit`) with coverage for the new services.
-
-## Troubleshooting
-
-Common runtime errors seen during refactors and their meaning:
-
-* `KeyError: No route registered for stage: Stage.WORKSPACE`
-
-  * **Cause:** a new Stage enum value was introduced without registering it.
-  * **Fix:** call `router.register(...)` for the new stage inside `app/app.py`.
-
-* `FileNotFoundError: Session directory not found` when reaching the Workspace page
-
-  * **Cause:** start/ingest steps were skipped, so `session_dir` was never created.
-  * **Fix:** complete Start + Upload steps, or set `annotator`, `save_dir`, `traces`, and `cell_ids` before jumping ahead.
-
-* `ValueError: traces must be a 2D array (T x N)`
-
-  * **Cause:** uploaded data has the wrong shape; the ingest service enforces 2D arrays.
-  * **Fix:** reshape / re-save the trace file so each column represents a cell.
-
-* `IndentationError` / `SyntaxError: unmatched ')'`
-
-  * **Cause:** manual merges left a stray parenthesis/indent.
-  * **Fix:** reformat the region and re‑run; prefer small, reviewable patches.
-
-## FAQ
-
-**Q:** Do I need a theme to run the app?
-**A:** No. The app runs with defaults. If `get_theme` exists, it’s used; otherwise the UI sticks to existing palette.
-
-**Q:** Why is pre band not multiplied by `k`?
-**A:** This was a deliberate decision to keep pre‑stimulus variability as a 1·STD reference and emphasize the effect size after the stimulus.
-
-## License
-
-MIT (or project‑specific license — update here if different).
+> **Tip:** running `opcal-mlt` copies `.streamlit/config.toml` from `src/opcal_mlt/app/config/streamlit_theme.toml` automatically (handled by `launch.py`).
 
 ---
 
-### Changelog (pointer)
+## Data lifecycle
 
-See `CHANGELOG.md` for detailed entries. For this release, include:
+| Stage | What happens | Files touched |
+| --- | --- | --- |
+| Start | Create or resume a session; ensure `session_dir` exists | `session.csv` header, `cell_map.csv` (if IDs available) |
+| Upload & indexing | Load traces (`.csv`/`.npz`), choose cell IDs (auto, headers, external map) | Populates in-memory trace set, optionally reuses prior `cell_map.csv` |
+| Workspace | Visualise baseline vs ΔF/F, save labels with notes & uncertainty flag, compute peaks/features | Append rows to `labels.csv` and `peaks.csv` |
+| Finish & export | Aggregate statistics, optionally ZIP the session folder | `labels.csv`, `cell_map.csv`, `session.csv`, `peaks.csv`, exported archive |
+| Archive & backup | Copy session folders into `data/labeled_sessions/` and zip nightly | `data/` tree (see [Data guide](docs/data/README.md)) |
 
-* UI: no visual changes unless specified.
-* Plots: pre/post STD rectangle policy update.
-* Main: safer dispatch and optional theme usage.
-* Screens: signature guarding and stimulus index bounds.
+### CSV schemas (summary)
+- `session.csv`: one row per app launch, including timestamps, annotator, app version, fs.
+- `cell_map.csv`: stable mapping from `cell_index` → `cell_id`.
+- `labels.csv`: per-cell annotations with processing metadata and derived features.
+- `peaks.csv`: per-peak measurements linked to `labels.csv` rows.
+
+Full field descriptions live in [docs/API.md](docs/API.md).
+
+---
+
+## Working on the codebase
+
+### Tests & static checks
+
+```bash
+# Unit tests
+pytest
+
+# Linting (Ruff) & formatting (Black)
+ruff check src tests
+black --check src tests
+```
+
+Core unit suites live in `tests/unit/` and focus on domain/services correctness. Extend them when introducing new service behaviour or data formats. See [docs/testing.md](docs/testing.md) for full policy.
+
+### Documentation standard
+
+- Docstrings follow the Google style described in `docs/dev/documentation_style.md`.
+- Keep module summaries concise and emphasise intent and domain context rather than restating types.
+- Inline comments should explain *why* a choice was made or note domain caveats; remove redundant legacy notes when touching code.
+
+### Streamlit development workflow
+- Run `opcal-mlt` in one terminal with `--server.runOnSave=true` (Streamlit menu) for live reload.
+- Keep business logic outside Streamlit pages: implement in `services/` or `core/`, then call from `views/`.
+- Avoid writing to disk directly from views; always go through the relevant service so CSV schemas remain consistent.
+
+### Release checklist (manual)
+1. Align version strings (`pyproject.toml`, `app/app.py::APP_VERSION`, docs).
+2. Update [docs/CHANGELOG.md](docs/CHANGELOG.md) with dated entries.
+3. Smoke-test the 4-step flow on representative data (CSV and NPZ).
+4. Bundle a release ZIP via `scripts/build-macos-zip.sh` (if distributing binaries).
+5. Tag the release in Git and attach the docs/demos requested by the team.
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause | Suggested fix |
+| --- | --- | --- |
+| `KeyError: No route registered for stage` | New workflow stage added without router registration | Update `app/app.py` to register the stage with the `Router` |
+| Session resets after page refresh | Session directory not initialised; state not hydrated | Complete Step 1 (annotator + save dir) or call `SessionService.hydrate_labels` |
+| `ValueError: traces must be a 2D array (T x N)` | Uploaded trace file shape mismatch | Reshape input so columns represent cells |
+| Duplicate cell ID warning | External mapping or headers contain repeats | Adjust mapping or regenerate IDs using the auto-ID helper |
+
+If you hit an unexpected bug, enable `streamlit run ... --logger.level=debug` and consult the terminal logs alongside `session.log` written next to `labels.csv`.
+
+---
+
+For roadmap items, open tasks, and post-release actions see `docs/todo.md`.

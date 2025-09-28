@@ -6,7 +6,14 @@ import streamlit as st
 
 
 def render_sidebar_params(state) -> None:
-    """Render sidebar parameters and persist values in session state."""
+    """Render sidebar parameters and persist values in session state.
+
+    Args:
+        state: Streamlit session proxy used by workspace pages.
+
+    Returns:
+        None: Streamlit renders UI controls directly.
+    """
     with st.sidebar:
         st.markdown("### Labeling parameters")
         state.fs_hz = st.number_input(

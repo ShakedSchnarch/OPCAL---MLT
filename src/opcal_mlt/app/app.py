@@ -104,6 +104,7 @@ def run() -> None:
 
 
 def _initialize_state() -> None:
+    """Populate ``st.session_state`` with baseline defaults."""
     defaults = {
         "annotator": "",
         "save_dir": "",
@@ -135,6 +136,7 @@ def _initialize_state() -> None:
 
 
 def _stage_index(stage: Stage) -> int:
+    """Return the index of the given stage within ``STAGE_FLOW``."""
     try:
         return STAGE_FLOW.index(stage)
     except ValueError:
@@ -142,10 +144,12 @@ def _stage_index(stage: Stage) -> int:
 
 
 def _workspace_data_missing() -> bool:
+    """Return True when workspace prerequisites are missing."""
     return (st.session_state.get("traces") is None) or (st.session_state.get("cell_ids") is None)
 
 
 def _ensure_session_directory(state: StateAdapter, session_service: SessionService) -> None:
+    """Create a session directory when prerequisites are satisfied."""
     if state.get_session_dir():
         return
     annotator = state.get_annotator().strip()
@@ -180,6 +184,7 @@ def _ensure_session_directory(state: StateAdapter, session_service: SessionServi
 
 
 def _render_navigation(state: StateAdapter, session_service: SessionService) -> None:
+    """Render footer navigation and manage stage transitions."""
     stage = state.get_stage()
     st.markdown("---")
 
@@ -228,6 +233,7 @@ def _render_navigation(state: StateAdapter, session_service: SessionService) -> 
 
 
 def _reset_for_new_session(state: StateAdapter) -> None:
+    """Reset session state while preserving user identity preferences."""
     keep_keys = {"annotator", "save_dir", "theme"}
     for key in list(st.session_state.keys()):
         if key in keep_keys:
@@ -245,12 +251,14 @@ def _reset_for_new_session(state: StateAdapter) -> None:
 
 
 def _apply_stage_from_query(state: StateAdapter) -> None:
+    """Hydrate the active stage from URL query parameters."""
     query_stage = _read_stage_from_query()
     if query_stage is not None and state.get_stage() != query_stage:
         state.set_stage(query_stage)
 
 
 def _read_stage_from_query() -> Stage | None:
+    """Parse the ``?stage`` query parameter into a ``Stage`` enum."""
     params = st.query_params
     value = params.get("stage")
     if isinstance(value, list):
@@ -268,17 +276,21 @@ def _read_stage_from_query() -> Stage | None:
 
 
 def _ensure_query_stage(stage: Stage) -> None:
+    """Synchronise the ``stage`` query parameter with the active stage."""
     desired = stage.name.lower()
-    qp = st.query_params
-    current = qp.get("stage")
+    qp_proxy = st.query_params
+    current = qp_proxy.get("stage")
     if isinstance(current, list):
         current = current[0] if current else None
     if current == desired:
         return
-    qp["stage"] = desired
+    new_params = dict(qp_proxy)
+    new_params["stage"] = desired
+    st.query_params = new_params
 
 
 def _set_stage(state: StateAdapter, stage: Stage) -> None:
+    """Set the current stage and propagate the change to the URL."""
     if state.get_stage() != stage:
         state.set_stage(stage)
     _ensure_query_stage(stage)

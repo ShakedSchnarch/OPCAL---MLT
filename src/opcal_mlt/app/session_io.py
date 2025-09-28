@@ -31,21 +31,23 @@ _CSV_DIALECT_KW = dict(quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
 
 
 def now_utc_iso() -> str:
-    """Return current UTC time in ISO‑8601 without microseconds.
+    """Return the current UTC timestamp in ISO-8601 without microseconds.
 
-    Example: "2025-08-12T07:30:00+00:00"
+    Returns:
+        str: Timestamp such as ``"2025-08-12T07:30:00+00:00"``.
     """
 
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
 def sha256_file(path: Path) -> str:
-    """Compute SHA‑256 hex digest of a file.
+    """Compute the SHA-256 hex digest of a file.
 
-    Parameters
-    ----------
-    path : Path
-        Path to the file to hash.
+    Args:
+        path: Path to the file to hash.
+
+    Returns:
+        str: Lowercase hexadecimal digest.
     """
 
     h = hashlib.sha256()
@@ -58,8 +60,16 @@ def sha256_file(path: Path) -> str:
 def make_session_dir(base_dir: Path, recording_id: str, annotator: str) -> Path:
     """Create and return a new session directory.
 
-    Layout: ``<base_dir>/<recording_id>/<YYYYmmdd_HHMMSS>_<annotator>/``
-    The directory is created if missing.
+    Args:
+        base_dir: Root folder that holds session subdirectories.
+        recording_id: Identifier for the acquisition (used as the first folder).
+        annotator: Annotator identifier appended to the directory name.
+
+    Returns:
+        Path: Newly created or existing session directory.
+
+    Notes:
+        Layout follows ``<base_dir>/<recording_id>/<YYYYmmdd_HHMMSS>_<annotator>/``.
     """
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -71,8 +81,10 @@ def make_session_dir(base_dir: Path, recording_id: str, annotator: str) -> Path:
 def write_session_header(session_dir: Path, header: Dict[str, Any]) -> None:
     """Append a session header row to ``session.csv``.
 
-    If the file does not exist, a header line is written first. The order of
-    columns follows the order of ``header`` keys (keep them stable upstream).
+    Args:
+        session_dir: Directory that owns ``session.csv``.
+        header: Mapping of column name to value; order defines column ordering.
+
     """
 
     session_dir.mkdir(parents=True, exist_ok=True)
@@ -86,9 +98,12 @@ def write_session_header(session_dir: Path, header: Dict[str, Any]) -> None:
 
 
 def write_cell_map(session_dir: Path, cell_map: List[Dict[str, Any]]) -> None:
-    """Write (overwrite) ``cell_map.csv`` with rows of ``{"cell_index","cell_id"}``.
+    """Overwrite ``cell_map.csv`` with ``{"cell_index", "cell_id"}`` rows.
 
-    This is written with a fixed schema to guarantee predictable column order.
+    Args:
+        session_dir: Directory containing the session artifacts.
+        cell_map: Rows to write; each row must provide ``cell_index`` and ``cell_id``.
+
     """
 
     session_dir.mkdir(parents=True, exist_ok=True)
@@ -102,10 +117,12 @@ def write_cell_map(session_dir: Path, cell_map: List[Dict[str, Any]]) -> None:
 
 
 def append_labels(session_dir: Path, row: Dict[str, Any]) -> None:
-    """Append a labeled‑cell row to ``labels.csv``.
+    """Append a labeled-cell row to ``labels.csv``.
 
-    If the file does not exist, a header line is emitted first. The column order
-    follows the incoming row's keys; call sites should keep key order stable.
+    Args:
+        session_dir: Directory containing the session artifacts.
+        row: Mapping representing the labeled cell; key order defines CSV columns.
+
     """
 
     session_dir.mkdir(parents=True, exist_ok=True)
@@ -119,7 +136,13 @@ def append_labels(session_dir: Path, row: Dict[str, Any]) -> None:
 
 
 def append_peaks(session_dir: Path, rows: List[Dict[str, Any]]) -> None:
-    """Append multiple peak rows to ``peaks.csv`` (no‑op on empty list)."""
+    """Append multiple peak rows to ``peaks.csv`` (no-op on empty input).
+
+    Args:
+        session_dir: Directory containing the session artifacts.
+        rows: Peak rows; the first row defines the CSV header ordering.
+
+    """
 
     if not rows:
         return

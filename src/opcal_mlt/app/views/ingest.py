@@ -1,20 +1,8 @@
-"""
-Step 2 — Upload Traces and Assign Cell IDs
-==========================================
-
-This module implements the second step of the labeling workflow in the OPCAL MLT tool.
-Users upload CSV/NPZ files, preview traces, and map cell IDs for further analysis.
-
-Functions:
-    render: Main entry point for the Streamlit page.
-    _render_csv_flow: UI for CSV file upload and mapping.
-    _render_npz_flow: UI for NPZ file upload and mapping.
-"""
+"""Streamlit page: Step 2 — upload traces and assign cell IDs."""
 from __future__ import annotations
 
 import io
 from pathlib import Path
-from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -24,15 +12,16 @@ from opcal_mlt.app.state import StateAdapter
 from opcal_mlt.domain.models import TraceSet
 from opcal_mlt.services.ingest import IngestService
 
-def render(*, state: StateAdapter, ingest_service: IngestService) -> None:
 
-# ==== Main Page Renderer ====
 def render(*, state: StateAdapter, ingest_service: IngestService) -> None:
-    """Render the Step 2 Streamlit page for uploading traces and assigning cell IDs.
+    """Render the Stage 2 upload and indexing page.
 
     Args:
-        state (StateAdapter): The application state adapter.
-        ingest_service (IngestService): Service for ingesting trace data.
+        state: Application state adapter.
+        ingest_service: Ingest service used to load trace data.
+
+    Returns:
+        None: Streamlit renders UI elements directly.
     """
     st.markdown("<div class='step-header'>Step 2 — Upload & indexing</div>", unsafe_allow_html=True)
     st.caption("Upload a CSV/NPZ file, preview it, and decide how to map cell IDs.")
@@ -43,7 +32,6 @@ def render(*, state: StateAdapter, ingest_service: IngestService) -> None:
         accept_multiple_files=False,
         key="uploader_step2",
     )
-
     if not uploaded:
         st.info("Drag & drop a CSV/NPZ file to begin.")
         return
@@ -71,8 +59,7 @@ def render(*, state: StateAdapter, ingest_service: IngestService) -> None:
         return
 
     if state.get("traces") is not None and state.get_cell_ids() is not None:
-        cell_ids = state.get_cell_ids() or []
-        if len(set(cell_ids)) != len(cell_ids):
+        if len(set(state.get_cell_ids())) != len(state.get_cell_ids()):
             st.warning("Duplicate cell IDs detected. Consider adjusting your mapping.")
         state.set("current_cell", 0)
         st.success(f"Loaded traces: shape {trace_set.traces.shape}. Mapping ready.")
@@ -86,6 +73,16 @@ def _render_csv_flow(
     raw_bytes: bytes,
     filename: str,
 ) -> None:
+    """Render CSV-specific preview and mapping controls.
+
+    Args:
+        state: Application state adapter.
+        ingest_service: Ingest service used for mapping helpers.
+        trace_set: Loaded trace data and metadata.
+        meta: Metadata dictionary returned by the ingest service.
+        raw_bytes: Raw file bytes used for preview tables.
+        filename: Original filename for contextual messaging.
+    """
     df_preview = pd.read_csv(io.BytesIO(raw_bytes))
     st.success(f"Selected file: **{filename}**")
     st.subheader("Preview")
@@ -115,6 +112,16 @@ def _render_npz_flow(
     raw_bytes: bytes,
     filename: str,
 ) -> None:
+    """Render NPZ-specific preview and mapping controls.
+
+    Args:
+        state: Application state adapter.
+        ingest_service: Ingest service used for mapping helpers.
+        trace_set: Loaded trace data and metadata.
+        meta: Metadata dictionary returned by the ingest service.
+        raw_bytes: Raw file bytes for preview.
+        filename: Original filename for contextual messaging.
+    """
     npz = np.load(io.BytesIO(raw_bytes), allow_pickle=True)
     st.success(f"Selected file: **{filename}**")
     st.subheader("Preview")
@@ -128,7 +135,6 @@ def _render_npz_flow(
     if has_ids:
         mode_options.append("Use IDs from NPZ")
     mode_options.extend(["Import external mapping CSV", "Auto-generate IDs"])
-
     default_index = mode_options.index("Auto-generate IDs") if "Auto-generate IDs" in mode_options else 0
 
     mode = st.radio("Choose mapping strategy", tuple(mode_options), index=default_index, key="npz_mapping_mode")
@@ -153,6 +159,14 @@ def _render_npz_flow(
 
 
 def _apply_external_mapping(state: StateAdapter, ingest_service: IngestService, trace_set: TraceSet, *, key: str) -> None:
+    """Apply an external mapping CSV to the current trace set.
+
+    Args:
+        state: Application state adapter.
+        ingest_service: Ingest service used to validate mappings.
+        trace_set: Loaded trace data to update with new IDs.
+        key: Streamlit widget key suffix to keep uploaders distinct.
+    """
     map_file = st.file_uploader("Upload mapping CSV (columns: cell_index, cell_id)", type=["csv"], key=key)
     if map_file is None:
         return
@@ -176,6 +190,14 @@ def _apply_external_mapping(state: StateAdapter, ingest_service: IngestService, 
 
 
 def _apply_auto_ids(state: StateAdapter, ingest_service: IngestService, trace_set: TraceSet, *, key_prefix: str) -> None:
+    """Generate and apply auto-incremented cell IDs.
+
+    Args:
+        state: Application state adapter.
+        ingest_service: Ingest service providing ID generation.
+        trace_set: Loaded trace data whose columns require IDs.
+        key_prefix: Prefix used to namespace Streamlit widget keys.
+    """
     colA, colB, colC = st.columns(3)
     prefix = colA.text_input(
         "Auto ID prefix",
@@ -203,4 +225,5 @@ def _apply_auto_ids(state: StateAdapter, ingest_service: IngestService, trace_se
     state.set("cell_id_prefix", prefix)
     state.set("cell_id_pad", int(pad))
     state.set("cell_id_start", int(start))
-    st.info("Auto-generated IDs applied.")
+    preview = ", ".join(ids[:3]) + (" …" if len(ids) > 3 else "")
+    st.info(f"Auto-generated IDs applied (preview): {preview}")

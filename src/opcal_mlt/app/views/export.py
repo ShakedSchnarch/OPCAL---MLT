@@ -1,13 +1,4 @@
-"""
-Step 4 — Finish & Export
-========================
-
-This module implements the final step of the labeling workflow in the OPCAL MLT tool.
-Users can review session statistics and export the completed labeling session as a ZIP archive.
-
-Functions:
-    render: Main entry point for the Streamlit page.
-"""
+"""Streamlit page: Step 4 — Finish & export."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -16,22 +7,22 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from opcal_mlt.app.components import render_session_diagnostics
 from opcal_mlt.app.state import StateAdapter
 from opcal_mlt.core import features as ft
 from opcal_mlt.services.export import ExportService
 from opcal_mlt.services.sessions import SessionService
 
-def render(
 
-# ==== Main Page Renderer ====
-def render(*, state, session_service, export_service):
-    """Render the Step 4 Streamlit page for finishing and exporting the session.
+def render(*, state: StateAdapter, session_service: SessionService, export_service: ExportService) -> None:
+    """Render the Stage 4 finish and export page.
 
     Args:
-        state: The application state adapter.
-        session_service: Service for session management.
-        export_service: Service for exporting session data.
+        state: Application state adapter.
+        session_service: Service for hydrating saved session artifacts.
+        export_service: Service that assembles ZIP exports.
+
+    Returns:
+        None: Streamlit renders UI elements directly.
     """
     st.markdown("<div class='step-header'>Step 4 — Finish & export</div>", unsafe_allow_html=True)
     session_dir_str = state.get_session_dir()
@@ -54,8 +45,6 @@ def render(*, state, session_service, export_service):
             pass
         state.set("_celebrated_finish", True)
 
-    render_session_diagnostics(st.session_state)
-
     st.markdown("---")
     st.subheader("Label statistics")
 
@@ -77,24 +66,14 @@ def render(*, state, session_service, export_service):
     elif loaded.cell_ids:
         total_cells = len(loaded.cell_ids)
 
-    labels_df, stats_df = ft.summarize_labels(
-        display_map,
-        loaded.cell_ids,
-        total_cells=total_cells,
-    )
+    labels_df, stats_df = ft.summarize_labels(display_map, loaded.cell_ids, total_cells=total_cells)
 
     if len(labels_df) == 0:
         st.info("No labels saved yet in this session.")
     else:
         st.caption(f"Found {len(labels_df)} labeled cells" + (f" / {total_cells} total" if total_cells else ""))
         try:
-            fig = px.pie(
-                stats_df,
-                names="label",
-                values="count",
-                hole=0.45,
-                title="Class distribution",
-            )
+            fig = px.pie(stats_df, names="label", values="count", hole=0.45, title="Class distribution")
             fig.update_traces(textposition="inside", textinfo="percent+label")
             fig.update_layout(margin=dict(l=10, r=10, t=40, b=10))
             st.plotly_chart(fig, use_container_width=True)

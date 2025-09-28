@@ -29,15 +29,16 @@ from opcal_mlt.domain.models import TraceSet
 from opcal_mlt.services.labeling import LabelingService
 from opcal_mlt.services.logging import SessionLogger
 
-def render(
-
 # ==== Main Page Renderer ====
-def render(*, state, labeling_service):
-    """Render the Step 3 Streamlit page for labeling workspace.
+def render(*, state: StateAdapter, labeling_service: LabelingService) -> None:
+    """Render the Stage 3 labeling workspace page.
 
     Args:
-        state: The application state adapter.
-        labeling_service: Service for labeling traces.
+        state: State adapter bridging Streamlit session state to services.
+        labeling_service: Service responsible for persisting labels and peaks.
+
+    Returns:
+        None: Streamlit elements are rendered inline; nothing is returned.
     """
     s = st.session_state
     if not ensure_workspace_state(s):
@@ -80,6 +81,13 @@ def _render_label_controls(
     labeling_service: LabelingService,
     data: dict,
 ) -> None:
+    """Render label controls and keep widget state in sync.
+
+    Args:
+        state: State adapter used to update the label map.
+        labeling_service: Service responsible for persisting label actions.
+        data: Processed trace payload for the active cell.
+    """
     s = st.session_state
 
     current_cell = int(s.current_cell)
@@ -122,6 +130,16 @@ def _handle_save_label(
     notes: str,
     uncertain: bool,
 ) -> None:
+    """Persist the current label and advance workspace state.
+
+    Args:
+        state: State adapter used to update session and label metadata.
+        labeling_service: Service that writes CSV artifacts.
+        data: Processed trace payload for the active cell.
+        label_choice: Label class selected in the UI.
+        notes: Free-text notes captured from the annotator.
+        uncertain: Whether the annotator flagged the label as uncertain.
+    """
     s = st.session_state
     session_dir = state.get_session_dir()
     if not session_dir:

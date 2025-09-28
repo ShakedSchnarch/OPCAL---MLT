@@ -8,7 +8,14 @@ import streamlit as st
 
 
 def render_session_diagnostics(state) -> None:
-    """Intentionally muted; diagnostics available only in debug builds."""
+    """Render session diagnostics when debug mode is enabled.
+
+    Args:
+        state: Streamlit session proxy; currently unused outside debug builds.
+
+    Returns:
+        None: Diagnostics are rendered inline if implemented.
+    """
     return
 
 

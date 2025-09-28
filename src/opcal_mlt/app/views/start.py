@@ -23,15 +23,16 @@ from opcal_mlt.services.sessions import SessionService
 
 _DEFAULT_SAVE_ROOT = Path.home() / "OPCAL_LABELS"
 
-def render(*, state: StateAdapter, session_service: SessionService) -> None:
-
 # ==== Main Page Renderer ====
 def render(*, state: StateAdapter, session_service: SessionService) -> None:
-    """Render the Step 1 Streamlit page for starting, resuming, or loading a session.
+    """Render the Stage 1 Streamlit page for starting, resuming, or loading a session.
 
     Args:
-        state (StateAdapter): The application state adapter.
-        session_service (SessionService): Service for session management.
+        state: Application state adapter.
+        session_service: Service responsible for session management.
+
+    Returns:
+        None: Streamlit renders output directly.
     """
     st.markdown("<div class='step-header'>Step 1 — Start session</div>", unsafe_allow_html=True)
     st.caption("Initialize a new labeling run, resume a recent session, or load one from disk.")
@@ -53,14 +54,15 @@ def render(*, state: StateAdapter, session_service: SessionService) -> None:
     else:
         _render_load_from_path(state, session_service)
 
-def _render_new_session(state: StateAdapter) -> None:
-
 # ==== Session Creation ====
 def _render_new_session(state: StateAdapter) -> None:
-    """Render UI for starting a new labeling session.
+    """Render UI elements for starting a new labeling session.
 
     Args:
-        state (StateAdapter): The application state adapter.
+        state: Application state adapter.
+
+    Returns:
+        None: Streamlit renders output directly.
     """
     st.markdown("### New session")
     default_root = state.get_save_dir().strip() or str(_DEFAULT_SAVE_ROOT)
@@ -114,6 +116,13 @@ def _render_resume(
     session_service: SessionService,
     save_root: str,
 ) -> None:
+    """Render controls for resuming a recently saved session.
+
+    Args:
+        state: Application state adapter.
+        session_service: Session service used for discovery and hydration.
+        save_root: Root directory to inspect for session folders.
+    """
     st.markdown("### Resume recent session")
     st.caption("Pick an existing session folder from your save directory.")
 
@@ -156,6 +165,12 @@ def _render_resume(
 
 
 def _render_load_from_path(state: StateAdapter, session_service: SessionService) -> None:
+    """Render controls for loading a session from an explicit path.
+
+    Args:
+        state: Application state adapter.
+        session_service: Session service used to validate and hydrate sessions.
+    """
     st.markdown("### Load session from path")
     st.caption("Provide a session directory that already contains labels.csv or session.csv.")
 
@@ -187,6 +202,14 @@ def _render_load_from_path(state: StateAdapter, session_service: SessionService)
 
 
 def _looks_like_session_dir(path_str: str) -> bool:
+    """Return True when the given path resembles a session directory.
+
+    Args:
+        path_str: Candidate path string provided by the user.
+
+    Returns:
+        bool: ``True`` when the directory exists and contains expected CSV artifacts.
+    """
     if not path_str:
         return False
     try:

@@ -23,7 +23,16 @@ __all__ = [
 
 # Helper to compute stimulus index, clamped to array bounds
 def _stim_index(n: int, fs_hz: float, stim_time_s: float) -> int:
-    """Return clamped stimulus index for an array of length n."""
+    """Return the clamped stimulus index for an array of length ``n``.
+
+    Args:
+        n: Number of samples in the trace.
+        fs_hz: Sampling frequency in Hertz.
+        stim_time_s: Stimulus timestamp in seconds.
+
+    Returns:
+        int: Index (0-based) clamped to ``[0, n-1]``.
+    """
     if n <= 0:
         return 0
     try:
@@ -36,11 +45,12 @@ def _stim_index(n: int, fs_hz: float, stim_time_s: float) -> int:
 def ensure_workspace_state(s) -> bool:
     """Ensure mandatory keys exist for the labeling workspace.
 
-    Returns
-    -------
-    bool
-        True when required data (traces & cell_ids) exist. If missing, renders a
-        warning and returns False.
+    Args:
+        s: Streamlit session state object (``st.session_state``).
+
+    Returns:
+        bool: ``True`` when traces and cell IDs exist; otherwise ``False`` after
+            displaying a warning.
     """
     if "label_map" not in s or not isinstance(s.label_map, dict):
         s.label_map = {}
@@ -57,22 +67,22 @@ def ensure_workspace_state(s) -> bool:
 
 
 def process_trace_for_cell(s):
-    """Compute processed signals and thresholds for the currently selected cell.
-    
-    Returns a *canonical* data pack that the plotting layer expects, keeping
-    UI code simple and consistent.
-    Parameters
-    ----------
-    s : streamlit.runtime.state.SafeSessionState
-        Shared session state (`st.session_state`). Must include `traces` and
-        `current_cell`.
+    """Compute processed signals and thresholds for the current cell.
 
-    Returns
-    -------
-    dict
-        Keys include: ``x, x_s, base, thr, peaks, t, stim_idx, fs_hz, k, smooth,
-        show_raw, show_smoothed, sd_const, rect_y0_pre, rect_y1_pre, rect_y0_post,
-        rect_y1_post, y_scale_mode, y_range``.
+    Args:
+        s: Streamlit session state (``st.session_state``) containing traces and
+            workspace parameters.
+
+    Returns:
+        dict: Canonical data pack consumed by plotting and export layers. Keys
+            include ``x``, ``x_s``, ``base``, ``thr``, ``peaks``, ``t``, ``stim_idx``,
+            ``fs_hz``, ``k``, ``smooth``, ``show_raw``, ``show_smoothed``, ``sd_const``,
+            ``rect_y0_pre``, ``rect_y1_pre``, ``rect_y0_post``, ``rect_y1_post``,
+            ``y_scale_mode``, and ``y_range``.
+
+    Notes:
+        The returned structure intentionally mirrors ``make_workspace_figure`` to
+        keep Streamlit pages declarative.
     """
     fs_hz = float(s.get("fs_hz", 1.08))
     smooth = bool(s.get("smooth", True))

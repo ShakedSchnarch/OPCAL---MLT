@@ -10,7 +10,17 @@ from opcal_mlt.app.plots import make_status_figure
 
 
 def render_navigation_and_progress(container, state, total_cells: int, theme: Dict) -> None:
-    """Render cell selector, progress indicator, and mini status bar."""
+    """Render cell selector, progress indicator, and mini status bar.
+
+    Args:
+        container: Streamlit column/container receiving the controls.
+        state: Streamlit session state proxy used by the workspace.
+        total_cells: Total number of cells in the dataset.
+        theme: Theme palette used to style plots and highlights.
+
+    Returns:
+        None: Streamlit renders UI elements directly.
+    """
     with container:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("Cells")

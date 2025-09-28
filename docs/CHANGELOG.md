@@ -1,45 +1,52 @@
 # Changelog
 
-## [1.0.0] - 2025-08-20
+All notable changes follow the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
+
+## [1.0.0-rc1] - 2025-08-21
 ### Added
-- Initial stable release of OPCAL-MLT.
-- Standardized structure and documentation across all modules.
-- Updated README, USER_GUIDE, and API documentation to reflect new version.
+- Router-driven Streamlit architecture with dedicated views for each stage of the workflow.
+- Session logging (`session.log`) alongside the CSV exports for auditing.
+- Text summaries for historical PDFs (`docs/dev/summary_notes.md`) and a testing playbook (`docs/testing.md`).
 
 ### Changed
-- Refactored Streamlit entry (`app/app.py`) and theming to support router-driven views.
-- Replaced legacy `screens.py` with modular `app/views/*` files and reusable components.
-- Improved handling of STD * k rectangles in preprocessing logic (only post-stimulus red rectangle scaled, green remains baseline).
+- Updated STD shading policy: the pre-stimulus band remains fixed at 1·σ, the post-stimulus band scales with the user-selected `k`.
+- Workspace navigation now highlights unlabeled cells and hydrates form controls with the last saved values.
+- The export screen hydrates from disk before rendering statistics.
 
 ### Fixed
-- Sidebar toggle issues resolved without affecting previous design.
-- Standard deviation scaling bug fixed in preprocessing.
+- Prevented stage desynchronisation on browser refresh by mirroring query parameters.
+- Added explicit duplicate-cell-ID warnings during ingestion instead of failing silently.
 
----
+### Documentation
+- Restored the logo in `README.md` and added navigation links to all project docs.
+- Updated installation instructions with `requirements-dev.txt` / `environment.yml` and linked to [docs/data/README.md](docs/data/README.md) and [docs/testing.md](docs/testing.md).
+- Expanded the Quickstart, user guide, and API contract.
 
-## 0.4.0 - 2025-08-17
-- Summary-first finish screen: **pie chart** of label distribution + labeled-cells table shown **before** export
-- Clear Step 1 actions (New / Resume / Load by path); stepper-only navigation (no auto-advance)
-- Robust resume/summary: hydrate from disk (`labels.csv`, `cell_map.csv`) when in-memory state is empty
-- Safer Streamlit state handling (no post-widget mutation); removed checkbox default conflicts
-- Step 4: replaced "Next" with **Start a new labeling session**; export block moved below summary
-- Statistics moved to core helper: `opcal_mlt.core.features.summarize_labels`
-- UI polish: consistent headings, Light theme defaults, improved footer with version
-- Documentation: updated README and USER_GUIDE for v0.4.0
-- Bug fixes: prevent Next → Finish without any saved labels; stabilize media cache warnings
+## [0.4.0] - 2025-08-17
+### Added
+- Summary-first finish screen with pie chart and labeled-cell table.
+- Session resume flow and disk hydration for statistics.
+- Core helper `opcal_mlt.core.features.summarize_labels` for label summaries.
 
-## 0.3.0
-- Added new labels: `Uncertain` and `Drifting`
-- Implemented session resume capability
-- Added progress bar for labeling workflow
-- Enabled per-cell label and notes persistence
-- Updated favicon and logos
-- Revised API.md documentation
-- Refactored code for improved documentation and industry-standard style
+### Changed
+- Streamlined stepper navigation (Start → Upload → Label → Finish) with explicit actions only.
+- Improved Streamlit state handling to avoid default-widget warnings.
+- UI polish: consistent headings, light theme defaults, footer with version string.
 
-## 0.2.0
-- Added core labeling UI components
-- Switched default export format from JSONL to CSV
-- Introduced initial STD shading feature
+### Fixed
+- Prevented navigation to Finish without an initial label.
+- Stabilised Streamlit media cache warnings.
 
-## 0.1.0 - Initial MVP skeleton
+## [0.3.0] - 2025-07-10
+- Added labels `Uncertain` and `Drifting` (later replaced by the uncertainty flag).
+- Introduced session resume capability and labeling progress bar.
+- Persisted per-cell notes, refreshed favicon and logos.
+- Revised API.md documentation and refactored code for clarity.
+
+## [0.2.0] - 2025-05-02
+- Added core labeling UI components.
+- Switched exports from JSONL to CSV (`labels.csv`, `cell_map.csv`).
+- Introduced the first STD shading visualisation.
+
+## [0.1.0] - 2025-03-15
+- Initial MVP skeleton with basic Streamlit interface and CSV ingest.

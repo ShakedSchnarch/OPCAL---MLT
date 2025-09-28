@@ -18,13 +18,28 @@ DEFAULT_PALETTE = {
 }
 
 def build_palette(overrides: dict | None = None) -> dict:
-    """Return a complete palette, filling missing keys with defaults."""
+    """Return a complete palette, filling missing keys with defaults.
+
+    Args:
+        overrides: Partial palette overrides. ``None`` returns the default palette.
+
+    Returns:
+        dict: Palette with all required keys populated.
+    """
     pal = dict(DEFAULT_PALETTE)
     if overrides:
         pal.update({k: v for k, v in overrides.items() if v is not None})
     return pal
 
 def inject_theme_css(palette: dict) -> None:
+    """Inject global CSS variables and styles using the provided palette.
+
+    Args:
+        palette: Palette dictionary used for CSS variables.
+
+    Returns:
+        None: CSS is injected via ``st.markdown``.
+    """
     palette = build_palette(palette)
     # Build CSS in two parts to avoid f-string `{}` parsing problems
     css_vars = f"""
@@ -50,6 +65,9 @@ def inject_theme_css(palette: dict) -> None:
     [data-testid="stSidebar"] {
       background: var(--panel) !important;
       border-right: 1px solid var(--border);
+    }
+    [data-testid="stSidebarCollapseButton"] {
+      display: flex !important;
     }
 
     [data-testid="stStatusWidget"], #MainMenu, footer { visibility: hidden !important; }
@@ -208,23 +226,39 @@ def inject_theme_css(palette: dict) -> None:
 # --- Plotly theme helpers -----------------------------------------------------
 
 def resolve_theme(palette: dict | None = None) -> dict:
-    """Return a complete theme/palette dict safe for both CSS and Plotly.
+    """Return a complete theme dictionary safe for CSS and Plotly.
 
-    Accepts a partial dict and fills missing keys from DEFAULT_PALETTE.
+    Args:
+        palette: Partial overrides for palette keys.
+
+    Returns:
+        dict: Fully populated palette.
     """
     return build_palette(palette or {})
 
 
 def default_theme() -> dict:
-    """Convenience accessor for a full default theme."""
+    """Convenience accessor for a full default theme.
+
+    Returns:
+        dict: Default palette used by the Streamlit app.
+    """
     return build_palette({})
 
 
 def apply_plotly_theme(fig, theme: dict | None = None):
     """Apply a lightweight Plotly skin aligned with the app theme.
 
-    This avoids using a global Plotly template and instead sets layout fields
-    directly on the figure passed in. Safe to call multiple times.
+    Args:
+        fig: Plotly figure to style.
+        theme: Optional palette overrides.
+
+    Returns:
+        Any: The styled Plotly figure (returned for chaining).
+
+    Notes:
+        This avoids using a global Plotly template and instead sets layout fields
+        directly on the figure passed in. Safe to call multiple times.
     """
     th = resolve_theme(theme)
 
@@ -258,6 +292,7 @@ def apply_plotly_theme(fig, theme: dict | None = None):
     return fig
 
 def render_stepper_and_tips(stage: int) -> None:
+    """Render the workflow stepper and contextual hints."""
     labels_steps = [
         "Start session",
         "Upload & indexing",
