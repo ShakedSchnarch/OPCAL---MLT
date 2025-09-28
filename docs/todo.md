@@ -6,12 +6,12 @@
   - [x] Fix scale
 - [x] Peak detection parameters
 - [x] Code refactor
-- [ ] Implement one-click launch (if applicable)
-- [ ] Refresh option
-- [ ] Update documentation and files
+- [x] Update documentation and files
 - [x] Tester
-- [ ] Sliding bar
+- [x] Sliding bar
 - [x] Documentation standardization
+- [ ]  Implement one-click launch (if applicable)
+- [ ] Refresh option
 
 ## Critical
 - [x] Extract clear text from `docs/dev/OPCal labeler notes.xlsx - הערות 2.pdf` (OCR or source request), document each note in a dedicated file/issue, and classify it (code/UX/docs). *Summaries captured in `docs/dev/summary_notes.md`.*
@@ -47,7 +47,4 @@
 - [ ] Document the CI/CD workflow in `docs/devops.md` and add a flow diagram to `docs/assets/`.
 
 ## Additional notes from user feedback
-- Keep the sidebar expanded by default and expose a toggle if it collapses.
 - Preserve workflow state across browser refreshes and avoid regressions that return users to earlier stages.
-- Show a preview of auto-generated `cell_id` values based on the selected prefix/padding.
-- Continue tightening documentation so first-time users (annotators, developers, reviewers) can follow targeted guides without patchwork instructions.

@@ -20,6 +20,7 @@ SNAPSHOT_VERSION = 1
 SNAPSHOT_FILENAME = "session_state.json"
 TRACES_FILENAME = "session_traces.npz"
 CACHE_ROOT = Path.home() / ".opcal_mlt" / "state_cache"
+DIRTY_FLAG = "_persist_dirty"
 
 _SIMPLE_KEYS: tuple[str, ...] = (
     "annotator",
