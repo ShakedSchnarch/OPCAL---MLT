@@ -22,6 +22,7 @@ from opcal_mlt.app.components import (
     render_session_diagnostics,
 )
 from opcal_mlt.app.state import StateAdapter
+from opcal_mlt.app.state_store import mark_dirty
 from opcal_mlt.app.theme import get_theme
 from opcal_mlt.app.workspace_logic import ensure_workspace_state, process_trace_for_cell
 from opcal_mlt.domain.enums import BaselineMethod, LabelClass
@@ -97,6 +98,7 @@ def _render_label_controls(
         st.session_state["workspace_notes_value"] = existing["notes"] if existing else ""
         st.session_state["workspace_uncertain_value"] = bool(existing.get("uncertain", False)) if existing else False
         s.prev_cell = current_cell
+        mark_dirty(st.session_state)
 
     st.subheader("Label")
     label_options = [cls.value for cls in LabelClass]
@@ -189,6 +191,7 @@ def _handle_save_label(
 
     state.update_label_map(int(s.current_cell), label_enum, notes, uncertain)
     s.history.append((int(s.current_cell), previous_entry))
+    mark_dirty(st.session_state)
     logger(f"save cell_index={int(s.current_cell)} label={label_enum.value}")
     st.success(f"Saved → {Path(session_dir) / 'labels.csv'}")
 
@@ -199,4 +202,5 @@ def _handle_save_label(
     ]
     if next_unlabeled:
         s.current_cell = int(next_unlabeled[0])
+        mark_dirty(st.session_state)
         st.rerun()

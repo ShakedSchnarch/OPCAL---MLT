@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping, MutableMapping, Sequence
 
 import numpy as np
 
@@ -21,6 +21,7 @@ SNAPSHOT_FILENAME = "session_state.json"
 TRACES_FILENAME = "session_traces.npz"
 CACHE_ROOT = Path.home() / ".opcal_mlt" / "state_cache"
 DIRTY_FLAG = "_persist_dirty"
+HYDRATED_FLAG = "_snapshot_hydrated"
 
 _SIMPLE_KEYS: tuple[str, ...] = (
     "annotator",
@@ -51,8 +52,6 @@ _SIMPLE_KEYS: tuple[str, ...] = (
     "workspace_uncertain_value",
     "prev_cell",
 )
-_COLLECTION_KEYS: tuple[str, ...] = ("cell_ids", "history")
-
 
 @dataclass(slots=True)
 class Snapshot:
@@ -233,3 +232,118 @@ def clear_snapshot(root: Path) -> None:
     for candidate in (root / SNAPSHOT_FILENAME, root / TRACES_FILENAME):
         if candidate.exists():
             candidate.unlink(missing_ok=True)
+
+
+def persist_state_for_token(token: str, state: Mapping[str, Any]) -> None:
+    """Persist ``state`` to the cache folder and session directory."""
+
+    if not token:
+        return
+    cache_root = resolve_cache_dir(token)
+    save_snapshot(cache_root, state)
+
+    session_dir = state.get("session_dir")
+    if session_dir:
+        try:
+            save_snapshot(Path(session_dir), state)
+        except OSError:
+            # Ignore filesystem errors for session_dir persistence.
+            pass
+
+
+def persist_state_from_mapping(state: Mapping[str, Any]) -> None:
+    """Persist state using the ``session_token`` embedded inside ``state``."""
+
+    token = state.get("session_token")
+    if isinstance(token, str) and token:
+        persist_state_for_token(token, state)
+
+
+def clear_state_for_token(token: str, *, session_dir: str | Path | None = None) -> None:
+    """Clear persisted state for ``token`` and optional ``session_dir``."""
+
+    if token:
+        cache_root = CACHE_ROOT / token
+        clear_snapshot(cache_root)
+
+    if session_dir:
+        try:
+            clear_snapshot(Path(session_dir))
+        except OSError:
+            pass
+
+
+def mark_dirty(state: MutableMapping[str, Any]) -> None:
+    """Mark ``state`` as needing persistence."""
+
+    state[DIRTY_FLAG] = True
+
+
+def consume_dirty_flag(state: MutableMapping[str, Any]) -> bool:
+    """Return and clear the dirty flag on ``state``."""
+
+    if DIRTY_FLAG not in state:
+        return False
+    flagged = bool(state.get(DIRTY_FLAG))
+    state.pop(DIRTY_FLAG, None)
+    return flagged
+
+
+def apply_snapshot_to_state(state: MutableMapping[str, Any], root: Path) -> bool:
+    """Load a snapshot from ``root`` and merge it into ``state``.
+
+    Returns ``True`` when a snapshot was applied.
+    """
+
+    snapshot = load_snapshot(root)
+    if snapshot is None:
+        return False
+    for key, value in snapshot.data.items():
+        state[key] = value
+    if snapshot.traces is not None:
+        state["traces"] = snapshot.traces
+    return True
+
+
+def hydrate_state(state: MutableMapping[str, Any], token: str) -> bool:
+    """Hydrate ``state`` from persisted snapshots identified by ``token``.
+
+    Returns ``True`` when hydration occurred. Hydration runs at most once per
+    Streamlit session; subsequent calls become no-ops until the flag is cleared.
+    """
+
+    if not token or state.get(HYDRATED_FLAG):
+        return False
+
+    hydrated = False
+    cache_root = resolve_cache_dir(token)
+    hydrated |= apply_snapshot_to_state(state, cache_root)
+
+    session_dir = state.get("session_dir")
+    if session_dir:
+        try:
+            hydrated |= apply_snapshot_to_state(state, Path(session_dir))
+        except OSError:
+            pass
+
+    state[HYDRATED_FLAG] = True
+    return hydrated
+
+
+__all__ = [
+    "Snapshot",
+    "CACHE_ROOT",
+    "DIRTY_FLAG",
+    "HYDRATED_FLAG",
+    "apply_snapshot_to_state",
+    "clear_snapshot",
+    "clear_state_for_token",
+    "consume_dirty_flag",
+    "hydrate_state",
+    "load_snapshot",
+    "mark_dirty",
+    "persist_state_for_token",
+    "persist_state_from_mapping",
+    "resolve_cache_dir",
+    "save_snapshot",
+]

@@ -10,8 +10,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, MutableMapping, Optional
 
+import numpy as np
+
 from opcal_mlt.domain.enums import LabelClass, Stage
 from opcal_mlt.domain.models import LabelMap
+from opcal_mlt.app.state_store import mark_dirty
 
 
 class StateAdapter:
@@ -54,7 +57,11 @@ class StateAdapter:
         return Stage.START
 
     def set_stage(self, stage: Stage) -> None:
-        self._state["stage"] = stage
+        if self._state.get("stage") != stage:
+            self._state["stage"] = stage
+            mark_dirty(self._state)
+        else:
+            self._state["stage"] = stage
 
     # --- Label map -------------------------------------------------------
     def get_label_map(self) -> LabelMap:
@@ -69,6 +76,7 @@ class StateAdapter:
             "uncertain": uncertain,
         }
         self._state["label_map"] = label_map
+        mark_dirty(self._state)
 
     def set_label_map_from_states(self, label_map: LabelMap) -> None:
         self._state["label_map"] = {
@@ -79,31 +87,46 @@ class StateAdapter:
             }
             for cell_index, state in label_map.items()
         }
+        mark_dirty(self._state)
 
     # --- Session metadata ------------------------------------------------
     def get_annotator(self) -> str:
         return str(self._state.get("annotator", ""))
 
     def set_annotator(self, annotator: str) -> None:
+        if self._state.get("annotator") != annotator:
+            mark_dirty(self._state)
         self._state["annotator"] = annotator
 
     def get_save_dir(self) -> str:
         return str(self._state.get("save_dir", ""))
 
     def set_save_dir(self, path: str | Path) -> None:
-        self._state["save_dir"] = str(path)
+        value = str(path)
+        if self._state.get("save_dir") != value:
+            mark_dirty(self._state)
+        self._state["save_dir"] = value
 
     def get_session_dir(self) -> str:
         return str(self._state.get("session_dir", ""))
 
     def set_session_dir(self, path: Optional[str | Path]) -> None:
         if path is None:
-            self._state.pop("session_dir", None)
+            if "session_dir" in self._state:
+                self._state.pop("session_dir", None)
+                mark_dirty(self._state)
         else:
-            self._state["session_dir"] = str(path)
+            value = str(path)
+            if self._state.get("session_dir") != value:
+                mark_dirty(self._state)
+            self._state["session_dir"] = value
 
     def set_cell_ids(self, cell_ids: list[str]) -> None:
-        self._state["cell_ids"] = list(cell_ids)
+        current = self._state.get("cell_ids")
+        new_value = list(cell_ids)
+        if current != new_value:
+            mark_dirty(self._state)
+        self._state["cell_ids"] = new_value
 
     def get_cell_ids(self) -> list[str] | None:
         return self._state.get("cell_ids")
@@ -113,7 +136,22 @@ class StateAdapter:
         return self._state.get(key, default)
 
     def set(self, key: str, value: Any) -> None:
+        current = self._state.get(key)
+        changed = False
+        if current is value:
+            changed = False
+        elif isinstance(current, np.ndarray) or isinstance(value, np.ndarray):
+            if not isinstance(current, np.ndarray) or not isinstance(value, np.ndarray):
+                changed = True
+            elif current.shape != value.shape or current.dtype != value.dtype:
+                changed = True
+            else:
+                changed = bool(np.any(current != value))
+        else:
+            changed = current != value
         self._state[key] = value
+        if changed:
+            mark_dirty(self._state)
 
 
 __all__ = ["StateAdapter"]

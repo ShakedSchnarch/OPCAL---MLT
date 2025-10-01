@@ -47,4 +47,4 @@
 - [ ] Document the CI/CD workflow in `docs/devops.md` and add a flow diagram to `docs/assets/`.
 
 ## Additional notes from user feedback
-- Preserve workflow state across browser refreshes and avoid regressions that return users to earlier stages.
+- [x] Preserve workflow state across browser refreshes and avoid regressions that return users to earlier stages (snapshot persistence + URL tokens).

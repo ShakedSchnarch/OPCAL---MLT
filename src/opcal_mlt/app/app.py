@@ -14,7 +14,14 @@ from uuid import uuid4
 
 import streamlit as st
 
-from opcal_mlt.app.state_store import load_snapshot, resolve_cache_dir
+from opcal_mlt.app.state_store import (
+    HYDRATED_FLAG,
+    clear_state_for_token,
+    consume_dirty_flag,
+    hydrate_state,
+    mark_dirty,
+    persist_state_from_mapping,
+)
 from opcal_mlt.app.views import export as page_export
 from opcal_mlt.app.views import ingest as page_ingest
 from opcal_mlt.app.views import start as page_start
@@ -55,7 +62,7 @@ def run() -> None:
     )
 
     session_token = _ensure_session_token()
-    _hydrate_from_persistence(session_token)
+    hydrate_state(st.session_state, session_token)
 
     state = StateAdapter(st.session_state)
     services = {
@@ -107,6 +114,7 @@ def run() -> None:
     router.dispatch(stage)
 
     _render_navigation(state, services["sessions"])
+    _persist_if_dirty()
 
 
 def _initialize_state() -> None:
@@ -178,7 +186,9 @@ def _ensure_session_directory(state: StateAdapter, session_service: SessionServi
     }
     ctx = session_service.start(config, recording_id, metadata=metadata)
     state.set_session_dir(ctx.paths.session_dir)
-    st.session_state["recording_id"] = recording_id
+    if st.session_state.get("recording_id") != recording_id:
+        st.session_state["recording_id"] = recording_id
+        mark_dirty(st.session_state)
 
     if cell_ids:
         write_cell_map(
@@ -240,6 +250,11 @@ def _render_navigation(state: StateAdapter, session_service: SessionService) -> 
 
 def _reset_for_new_session(state: StateAdapter) -> None:
     """Reset session state while preserving user identity preferences."""
+    token = st.session_state.get("session_token", "")
+    prior_session_dir = st.session_state.get("session_dir")
+    if token:
+        clear_state_for_token(token, session_dir=prior_session_dir)
+    st.session_state.pop(HYDRATED_FLAG, None)
     keep_keys = {"annotator", "save_dir", "theme"}
     for key in list(st.session_state.keys()):
         if key in keep_keys:
@@ -254,6 +269,7 @@ def _reset_for_new_session(state: StateAdapter) -> None:
     st.session_state.setdefault("traces", None)
     st.session_state.setdefault("cell_ids", None)
     _set_stage(state, Stage.START)
+    mark_dirty(st.session_state)
 
 
 def _apply_stage_from_query(state: StateAdapter) -> None:
@@ -289,6 +305,13 @@ def _set_stage(state: StateAdapter, stage: Stage) -> None:
     if state.get_stage() != stage:
         state.set_stage(stage)
     _ensure_query_stage(stage)
+
+
+def _persist_if_dirty() -> None:
+    """Persist session state when marked dirty."""
+
+    if consume_dirty_flag(st.session_state):
+        persist_state_from_mapping(st.session_state)
 
 
 def _ensure_query_param(key: str, desired: str) -> None:
@@ -327,30 +350,6 @@ def _ensure_session_token() -> str:
     st.session_state["session_token"] = state_token
     _ensure_query_param(SESSION_TOKEN_PARAM, state_token)
     return state_token
-
-
-def _hydrate_from_persistence(token: str) -> None:
-    """Hydrate ``st.session_state`` from disk if a snapshot exists."""
-    if not token:
-        return
-
-    cache_root = resolve_cache_dir(token)
-    _apply_snapshot_if_present(cache_root)
-
-    session_dir = st.session_state.get("session_dir")
-    if session_dir:
-        _apply_snapshot_if_present(Path(session_dir))
-
-
-def _apply_snapshot_if_present(root: Path) -> None:
-    """Load a snapshot from ``root`` and merge it into ``st.session_state``."""
-    snapshot = load_snapshot(root)
-    if snapshot is None:
-        return
-    for key, value in snapshot.data.items():
-        st.session_state[key] = value
-    if snapshot.traces is not None:
-        st.session_state["traces"] = snapshot.traces
 
 
 if __name__ == "__main__":
