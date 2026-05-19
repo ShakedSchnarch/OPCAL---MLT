@@ -3,11 +3,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pandas as pd
 import plotly.express as px
 import streamlit as st
 
 from opcal_mlt.app.state import StateAdapter
+from opcal_mlt.app.state_store import load_snapshot
 from opcal_mlt.core import features as ft
 from opcal_mlt.services.export import ExportService
 from opcal_mlt.services.sessions import SessionService
@@ -90,12 +90,12 @@ def render(*, state: StateAdapter, session_service: SessionService, export_servi
 
     st.markdown("---")
     st.subheader("Export")
-    export_col1, export_col2 = st.columns([1, 2])
-    with export_col1:
+    zip_col1, zip_col2 = st.columns([1, 2])
+    with zip_col1:
         st.markdown('<div class="btn-action btn-lg">', unsafe_allow_html=True)
         trigger = st.button("Export session as ZIP", key="export_zip_btn")
         st.markdown('</div>', unsafe_allow_html=True)
-    with export_col2:
+    with zip_col2:
         st.caption("Creates a ZIP archive of the current session folder (labels.csv, peaks.csv, session.csv, cell_map.csv).")
 
     if trigger:
@@ -105,3 +105,66 @@ def render(*, state: StateAdapter, session_service: SessionService, export_servi
             st.success(f"Exported: {archive_path}")
         except Exception as exc:
             st.error(f"Export failed: {exc}")
+
+    training_traces = _resolve_export_traces(state, session_dir)
+    source_name = _resolve_source_name(state, loaded.metadata)
+
+    csv_col1, csv_col2 = st.columns([1, 2])
+    with csv_col1:
+        st.markdown('<div class="btn-action btn-lg">', unsafe_allow_html=True)
+        trigger_training = st.button(
+            "Export training CSVs",
+            key="export_training_csv_btn",
+            disabled=training_traces is None,
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+    with csv_col2:
+        st.caption(
+            "Creates class-wise CSV files with timepoints as rows and ROIs as columns. "
+            "Uncertain labels are exported separately."
+        )
+        if training_traces is None:
+            st.warning("Training CSV export requires the loaded trace matrix. Re-open a session with saved traces or upload the source file again.")
+
+    if trigger_training and training_traces is not None:
+        try:
+            result = export_service.export_training_csv_bundle(
+                session_dir=session_dir,
+                traces=training_traces,
+                source_name=source_name,
+            )
+            counts = ", ".join(f"{name}: {count}" for name, count in result.counts_by_file.items())
+            state.set("export_done", True)
+            st.success(f"Exported training CSV bundle: {result.archive_path}")
+            st.caption(counts)
+        except Exception as exc:
+            st.error(f"Training CSV export failed: {exc}")
+
+
+def _resolve_export_traces(state: StateAdapter, session_dir: Path):
+    traces = state.get("traces")
+    if traces is not None and hasattr(traces, "shape"):
+        return traces
+
+    snapshot = load_snapshot(session_dir)
+    if snapshot is None or snapshot.traces is None:
+        return None
+
+    state.set("traces", snapshot.traces)
+    cell_ids = snapshot.data.get("cell_ids")
+    if cell_ids and not state.get_cell_ids():
+        state.set_cell_ids(cell_ids)
+    for key in ("source_filename", "source_sha256"):
+        value = snapshot.data.get(key)
+        if value and not state.get(key):
+            state.set(key, value)
+    return snapshot.traces
+
+
+def _resolve_source_name(state: StateAdapter, metadata: dict) -> str:
+    return str(
+        state.get("source_filename")
+        or metadata.get("source_path")
+        or metadata.get("recording_id")
+        or "recording"
+    )

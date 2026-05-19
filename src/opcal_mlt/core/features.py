@@ -1,6 +1,3 @@
-
-from __future__ import annotations
-
 """
 Feature Extraction Utilities
 ===========================
@@ -9,9 +6,12 @@ Feature extraction and labeling summary utilities for OPCAL‑Labeler.
 Includes descriptive statistics and aggregation functions for calcium traces and label maps.
 All features are designed to be fast, interpretable, and robust for research workflows.
 """
+from __future__ import annotations
 
-from typing import Dict
+from typing import Any, Dict, List, Tuple
+
 import numpy as np
+import pandas as pd
 
 
 def basic_features(
@@ -75,15 +75,12 @@ def basic_features(
         "peaks_per_min": peaks_per_min,
     }
 
-# ---- Labeling summaries (UI-agnostic) ---------------------------------------
-from typing import Dict as _Dict, Tuple as _Tuple, List as _List, Any as _Any
-import pandas as _pd
 
 def summarize_labels(
-    label_map: _Dict[int, _Dict[str, _Any]],
-    cell_ids: _List[str] | None = None,
+    label_map: Dict[int, Dict[str, Any]],
+    cell_ids: List[str] | None = None,
     total_cells: int | None = None,
-) -> _Tuple[_pd.DataFrame, _pd.DataFrame]:
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Create a per-cell labels table and per-class statistics.
 
@@ -103,8 +100,8 @@ def summarize_labels(
     """
     # Empty case
     if not label_map:
-        labels_df = _pd.DataFrame(columns=["cell_index", "cell_id", "label", "notes", "uncertain"])  # empty
-        stats_df = _pd.DataFrame(columns=["label", "count", "percent"])
+        labels_df = pd.DataFrame(columns=["cell_index", "cell_id", "label", "notes", "uncertain"])  # empty
+        stats_df = pd.DataFrame(columns=["label", "count", "percent"])
         return labels_df, stats_df
 
     # Build per-cell table
@@ -120,7 +117,7 @@ def summarize_labels(
             "notes": str(meta.get("notes", "")),
             "uncertain": bool(meta.get("uncertain", False)),
         })
-    labels_df = _pd.DataFrame(rows).sort_values("cell_index").reset_index(drop=True)
+    labels_df = pd.DataFrame(rows).sort_values("cell_index").reset_index(drop=True)
 
     # Aggregate per-class
     counts = labels_df["label"].value_counts(dropna=False).rename_axis("label").reset_index(name="count")

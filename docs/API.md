@@ -119,6 +119,27 @@ One row per detected peak (only for labeled cells):
 ### 2.5 Summary hydration (Step 4)
 The **Finish** screen prefers to read labels and IDs from disk. If the in‑memory state is empty (e.g., after a browser refresh), it hydrates from `labels.csv` and `cell_map.csv` when present. Percentages in the summary are computed against the total number of cells when known (from `traces` or `cell_map.csv`), otherwise against the number of labeled cells.
 
+### 2.6 Training CSV export
+The **Finish** screen can also export a training-oriented ZIP bundle:
+
+```
+<session_dir>/training_csv_export_<source>_<YYYYmmdd_HHMMSS>/
+├─ data for training_<source>_low_activity.csv
+├─ data for training_<source>_high_flat.csv
+├─ data for training_<source>_high_oscillatory.csv
+├─ data for training_<source>_oscillatory.csv
+├─ data for training_<source>_drifting.csv
+└─ data for training_<source>_uncertain.csv
+```
+
+Only files with at least one ROI are written. Every CSV is a plain numeric matrix with **no header and no index**:
+
+- Rows are timepoints.
+- Columns are ROIs belonging to that class.
+- If a ROI is marked `uncertain=True`, it is written only to the `uncertain` CSV and excluded from class files.
+- If the same ROI was saved more than once, the latest `labels.csv` row for that `cell_index` is used.
+- The generated ZIP contains only these class-wise CSV files.
+
 ---
 
 ## 3) Controlled Vocabulary — Labels
@@ -193,3 +214,9 @@ Earlier prototypes supported a JSONL output (one JSON object per cell). The curr
 - Clarified the visual policy for STD rectangles in the UI (pre‑stimulus band uses **k = 1**, post‑stimulus band uses **k**). This is a **visual aid only** and does not change any saved values.
 - Router/dispatch refactors in the app do not affect I/O formats.
 - Examples updated to show `app_version = 1.0.0`.
+
+## 8) Format changes in 1.1.0
+
+- Added a training CSV export bundle with class-wise, headerless matrices.
+- Uncertain labels are exported to a dedicated CSV and excluded from class-specific training CSVs.
+- New sessions store the uploaded source filename and SHA-256 in `session.csv` metadata when available.

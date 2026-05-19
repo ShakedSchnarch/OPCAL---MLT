@@ -73,8 +73,10 @@ def make_workspace_figure(
 
     if all(k in data for k in ("rect_y0_pre", "rect_y1_pre", "rect_y0_post", "rect_y1_post")):
         # Backward‑compatible path: use provided rectangle params as‑is
-        y0_pre = float(data["rect_y0_pre"]); y1_pre = float(data["rect_y1_pre"]) 
-        y0_post = float(data["rect_y0_post"]); y1_post = float(data["rect_y1_post"]) 
+        y0_pre = float(data["rect_y0_pre"])
+        y1_pre = float(data["rect_y1_pre"])
+        y0_post = float(data["rect_y0_post"])
+        y1_post = float(data["rect_y1_post"])
     else:
         # Fallback path: compute spans via the shared preprocessing helper so the
         # UI remains consistent even if upstream data lacks explicit rectangle params.

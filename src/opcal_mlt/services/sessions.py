@@ -108,9 +108,7 @@ class SessionService:
                     cell_index=int(getattr(row, "cell_index")),
                     label=LabelClass.from_str(str(label)),
                     notes="" if pd.isna(getattr(row, "notes", "")) else str(getattr(row, "notes", "")),
-                    uncertain=bool(getattr(row, "uncertain", False))
-                    if "uncertain" in df.columns and not pd.isna(getattr(row, "uncertain", None))
-                    else False,
+                    uncertain=_coerce_bool(getattr(row, "uncertain", False)) if "uncertain" in df.columns else False,
                 )
             )
         return build_label_map(records)
@@ -246,6 +244,19 @@ class SessionService:
             return {k: ("" if pd.isna(v) else v) for k, v in row.items()}
         except Exception:
             return {}
+
+
+def _coerce_bool(value: object) -> bool:
+    if pd.isna(value):
+        return False
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in {"true", "1", "yes", "y"}:
+        return True
+    if text in {"false", "0", "no", "n", ""}:
+        return False
+    return bool(value)
 
 
 __all__ = ["SessionService", "SessionContext"]

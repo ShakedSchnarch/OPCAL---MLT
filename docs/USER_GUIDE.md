@@ -1,4 +1,4 @@
-# User Guide — OPCAL‑MLT v1.0.0-rc1
+# User Guide — OPCAL‑MLT v1.1.0
 
 This guide walks annotators and lab operators through the complete four-stage workflow: **Start → Upload → Workspace → Finish**. All data stays local and the app writes human-readable CSV files.
 
@@ -20,31 +20,48 @@ This guide walks annotators and lab operators through the complete four-stage wo
 ## Prerequisites
 
 - Python 3.12 (as specified in `pyproject.toml`)
-- Dependencies installed via `requirements-dev.txt` or `environment.yml`
+- Dependencies installed via `pip install -e .` from the project root
 - Project installed in editable mode (`pip install -e .`)
 - Trace file in CSV (`T × N`) or NPZ format; optional metadata JSON/CSV with cell identifiers
+- A local project folder outside iCloud/OneDrive/Dropbox is recommended for reliable virtual environments.
 
 ---
 
 ## Launch the app
 
+### macOS / Linux
+
 ```bash
-# Option A — venv
-python3 -m venv .venv
+cd /path/to/OPCAL---MLT
+python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -U pip
-pip install -r requirements-dev.txt
-pip install -e .
-
-# Option B — conda
-conda env create -f environment.yml
-conda activate opcal-mlt
-pip install -e .
-
-# Run Streamlit
+python -m pip install -U pip setuptools wheel
+python -m pip install -e .
 opcal-mlt
-# or
-python -m opcal_mlt.app.main
+```
+
+### Windows PowerShell
+
+```powershell
+cd C:\Users\<you>\Projects\OPCAL---MLT
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -U pip setuptools wheel
+python -m pip install -e .
+opcal-mlt
+```
+
+If PowerShell blocks activation:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+```
+
+You can also run the Windows helper from the project root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\OPCAL-Labeler.ps1
 ```
 
 The browser opens at `http://localhost:8501`. Keep the terminal visible in case the app emits log messages or errors.
@@ -111,7 +128,15 @@ Workflow tips:
 1. The app hydrates from disk (`labels.csv`, `cell_map.csv`) before rendering.
 2. Review the label statistics: pie chart and detailed table (notes + uncertainty flag).
 3. Click **Export session as ZIP** to produce `<session_dir>.zip` alongside the CSV files.
-4. Use **Start a new session** to reset the state while preserving annotator/save-directory preferences.
+4. Click **Export training CSVs** to produce class-wise headerless CSV files for model training. Uncertain labels are written to a separate CSV and excluded from class files.
+5. Use **Start a new session** to reset the state while preserving annotator/save-directory preferences.
+
+The two export buttons serve different purposes:
+
+| Export | Contents | Use case |
+| --- | --- | --- |
+| **Export session as ZIP** | The full session folder: `session.csv`, `cell_map.csv`, `labels.csv`, `peaks.csv`, snapshots/logs | Backup, audit, resume, and sharing the complete labeling session |
+| **Export training CSVs** | Only class-wise, headerless CSV files plus a ZIP containing those files | Downstream training data requested by the analysis workflow |
 
 ---
 
@@ -139,6 +164,9 @@ Ensure the browser window is focused for shortcuts to work.
 | `labels.csv` | Per-cell annotations with processing settings, derived features, uncertainty flag | Append-only |
 | `peaks.csv` | Peak-level measurements (index, time, value) | Written only when peaks are present |
 | `session.log` | Text audit trail of labeling actions | Optional but recommended |
+| `training_csv_export_*` | Class-wise training CSV export bundle | Written on demand from Stage 4 |
+
+Training CSV files are intentionally plain matrices: no headers, no cell IDs, no notes, no formatting. Keep `labels.csv` and `cell_map.csv` when you need provenance.
 
 See [docs/API.md](API.md) for detailed schemas.
 

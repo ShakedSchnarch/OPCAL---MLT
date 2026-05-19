@@ -10,7 +10,8 @@ This document captures the testing policy for the project so release deliverable
 
 ## Local execution
 ```bash
-# Assuming an activated venv/conda environment
+# Assuming an activated venv/conda environment with dev dependencies
+python -m pip install -e ".[dev]"
 pytest                     # run the full unit suite
 pytest tests/unit/test_session_service.py  # target a single module
 
@@ -26,6 +27,28 @@ black --check src tests
 - `services/labeling` — feature calculation, CSV append behaviour, peak serialization.
 - `app/session_io` — end-to-end CSV writes with mocked filesystem interactions (pending work).
 
+## Manual release smoke
+Run this on macOS and Windows before publishing a release:
+
+1. Create a fresh session in a temporary save directory.
+2. Upload a representative CSV and, separately, an NPZ if available.
+3. Save labels across at least three classes.
+4. Mark at least one ROI as uncertain.
+5. Re-save one ROI with a different label and confirm the latest label is reflected in Step 4.
+6. Click **Export session as ZIP** and confirm the ZIP contains `session.csv`, `cell_map.csv`, `labels.csv`, `peaks.csv` when peaks exist, and `session.log`.
+7. Click **Export training CSVs** and confirm:
+   - every generated CSV has no header,
+   - rows equal source timepoints,
+   - columns equal the number of ROIs assigned to that class,
+   - uncertain ROIs appear only in the `uncertain` CSV.
+
+Useful shape checks inside a training export directory:
+
+```bash
+wc -l *.csv
+awk -F, 'FNR==1{print FILENAME, "columns=" NF}' *.csv
+```
+
 ## Planned additions
 1. **Session merge tests** — once `scripts/merge_sessions_to_dataset.py` is implemented, create integrity checks for label consolidation.
 2. **Automated UI smoke** — add a minimal Streamlit Testing API scenario to guard the multi-step flow.
@@ -35,4 +58,4 @@ black --check src tests
 - Persist critical test runs (e.g. `pytest -vv`) under `docs/dev/build-log.md` when preparing releases.
 - Include a brief summary of test results in release notes or supporting documentation.
 
-For environment setup see `requirements-dev.txt`/`environment.yml`. Backup policies live in `docs/data/README.md`.
+For environment setup see [README.md](../README.md) and [docs/quickstart.md](quickstart.md). Backup policies live in `docs/data/README.md`.

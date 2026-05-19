@@ -16,6 +16,7 @@ rsync -a \
   --exclude ".pytest_cache" \
   --exclude "*.pyc" \
   README.md pyproject.toml \
+  requirements.txt requirements-dev.txt environment.yml \
   docs/USER_GUIDE.md \
   src/ "$OUT/"
 

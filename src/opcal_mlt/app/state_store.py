@@ -30,6 +30,8 @@ _SIMPLE_KEYS: tuple[str, ...] = (
     "params_confirmed",
     "export_done",
     "recording_id",
+    "source_filename",
+    "source_sha256",
     "session_dir",
     "current_cell",
     "fs_hz",

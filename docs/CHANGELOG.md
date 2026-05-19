@@ -2,6 +2,22 @@
 
 All notable changes follow the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
+## [1.1.0] - 2026-05-10
+### Added
+- Class-wise training CSV export from the Finish screen.
+- Separate uncertain-label CSV export that excludes uncertain ROIs from class-specific files.
+- Source filename and SHA-256 session metadata for newly uploaded source files.
+- Windows PowerShell source launcher (`scripts/OPCAL-Labeler.ps1`) and explicit Windows install/run commands.
+
+### Changed
+- App and package version now come from `opcal_mlt.__version__`.
+- `pytest` can run from the repository root without requiring an editable install first.
+- README, Quickstart, User Guide, Distribution Playbook, and Testing Playbook now describe the training export and platform-specific setup paths.
+
+### Fixed
+- macOS source ZIP launcher referenced by `scripts/build-macos-zip.sh` now exists and installs/launches the local app.
+- Session hydration treats string boolean values such as `"False"` as false instead of truthy text.
+
 ## [1.0.0-rc1] - 2025-08-21
 ### Added
 - Router-driven Streamlit architecture with dedicated views for each stage of the workflow.

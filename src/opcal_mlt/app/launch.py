@@ -6,11 +6,11 @@ Entry point for running the OPCAL-MLT Streamlit application locally.
 Programmatically invokes the Streamlit CLI to run `main.py` in headless mode.
 """
 from __future__ import annotations
+import importlib.resources as pkg_resources
 import sys
 from pathlib import Path
+
 from streamlit.web.cli import main as st_main
-import os
-import importlib.resources as pkg_resources
 
 def _ensure_streamlit_config() -> None:
     """
@@ -42,8 +42,14 @@ def main() -> None:
     # Determine absolute path to the Streamlit app entry file
     app_path = str(Path(__file__).parent / "main.py")
 
-    # Override sys.argv to mimic a CLI call: `streamlit run app_path --server.headless=true`
-    sys.argv = ["streamlit", "run", app_path, "--server.headless=true"]
+    # Override sys.argv to mimic a CLI call for a local end-user launch.
+    sys.argv = [
+        "streamlit",
+        "run",
+        app_path,
+        "--server.headless=true",
+        "--server.fileWatcherType=none",
+    ]
 
     # Invoke Streamlit's CLI main function
     st_main()

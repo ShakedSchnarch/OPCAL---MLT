@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import hashlib
 from pathlib import Path
 
 import numpy as np
@@ -38,6 +39,8 @@ def render(*, state: StateAdapter, ingest_service: IngestService) -> None:
 
     suffix = Path(uploaded.name).suffix.lower()
     raw_bytes = uploaded.getvalue()
+    state.set("source_filename", uploaded.name)
+    state.set("source_sha256", hashlib.sha256(raw_bytes).hexdigest())
     buffer_for_service = io.BytesIO(raw_bytes)
     buffer_for_service.name = uploaded.name
 

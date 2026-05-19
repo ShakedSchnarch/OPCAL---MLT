@@ -6,20 +6,33 @@
 
 ## 1. Install the app
 
+Use a local folder that is not managed by iCloud/OneDrive/Dropbox when possible.
+
+### macOS / Linux
+
 ```bash
-# Choose one option from the project root
-
-# (A) venv + pip
-python3 -m venv .venv
+cd /path/to/OPCAL---MLT
+python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -U pip
-pip install -r requirements-dev.txt
-pip install -e .
+python -m pip install -U pip setuptools wheel
+python -m pip install -e .
+```
 
-# (B) conda environment
-conda env create -f environment.yml
-conda activate opcal-mlt
-pip install -e .
+### Windows PowerShell
+
+```powershell
+cd C:\Users\<you>\Projects\OPCAL---MLT
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -U pip setuptools wheel
+python -m pip install -e .
+```
+
+If activation is blocked:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
 ```
 
 > When an official PyPI package is available you will be able to run `pip install opcal-mlt` inside a clean environment.
@@ -74,6 +87,11 @@ The browser opens at `http://localhost:8501`. Keep the terminal visible for logs
 1. After saving at least one label, go to **Step 4 — Finish & export**.
 2. Review the statistics table and pie chart for sanity checks.
 3. Click **Export session as ZIP** to create `<session>.zip` next to your CSVs.
+4. Click **Export training CSVs** to create class-wise CSV files and a matching ZIP:
+   - one CSV per confident class,
+   - one separate `uncertain` CSV,
+   - rows are timepoints and columns are ROIs,
+   - no headers or formatting.
 
 ---
 

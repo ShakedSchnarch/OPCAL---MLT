@@ -14,6 +14,7 @@ from uuid import uuid4
 
 import streamlit as st
 
+from opcal_mlt import __version__
 from opcal_mlt.app.state_store import (
     HYDRATED_FLAG,
     clear_state_for_token,
@@ -40,7 +41,7 @@ from opcal_mlt.services.logging import SessionLogger
 from opcal_mlt.services.sessions import SessionService
 
 APP_NAME = "OPCAL-Labeler"
-APP_VERSION = "1.0.0-rc1"
+APP_VERSION = __version__
 STAGE_FLOW = [Stage.START, Stage.INGEST, Stage.WORKSPACE, Stage.EXPORT]
 ASSETS_DIR = Path(__file__).parent / "assets"
 DEFAULT_ICON = ASSETS_DIR / "logo.png"
@@ -126,6 +127,8 @@ def _initialize_state() -> None:
         "params_confirmed": False,
         "export_done": False,
         "recording_id": "",
+        "source_filename": "",
+        "source_sha256": "",
         "label_map": {},
         "current_cell": 0,
         "traces": None,
@@ -183,6 +186,8 @@ def _ensure_session_directory(state: StateAdapter, session_service: SessionServi
         "fs_hz": float(st.session_state.get("fs_hz", 1.08)),
         "started_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "app_version": APP_VERSION,
+        "source_path": str(st.session_state.get("source_filename", "")),
+        "source_sha256": str(st.session_state.get("source_sha256", "")),
     }
     ctx = session_service.start(config, recording_id, metadata=metadata)
     state.set_session_dir(ctx.paths.session_dir)

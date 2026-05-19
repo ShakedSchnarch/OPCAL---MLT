@@ -27,9 +27,9 @@
 | --- | --- |
 | Guided flow | Four stages (Start → Upload & indexing → Workspace → Finish & export) with persistent session state |
 | Visual policy | Pre-stimulus STD band fixed to 1·σ, post-stimulus band scales with `k`; thresholds stay consistent with detection logic |
-| Outputs | Deterministic CSV bundle (`session.csv`, `cell_map.csv`, `labels.csv`, `peaks.csv`) plus optional ZIP export |
+| Outputs | Deterministic session CSVs (`session.csv`, `cell_map.csv`, `labels.csv`, `peaks.csv`), ZIP archive export, and class-wise training CSV export |
 | Services | Typed domain + service layer for ingesting traces, saving labels, and exporting sessions |
-| Versioning | App UI reports `1.0.0-rc1`; package metadata currently `0.4.0` while the team finalises the stable release |
+| Versioning | App UI and package metadata report `1.1.0` from `opcal_mlt.__version__` |
 
 ---
 
@@ -57,29 +57,52 @@ Key concepts:
 - Install dependencies via `requirements.txt` **or** the Conda `environment.yml`
 - Node/JS is **not** required; Streamlit bundles its own frontend
 - (Optional) `watchdog` package speeds up Streamlit autoreload on macOS/Linux
+- Prefer a local, non-synced project folder such as `~/Projects/OPCAL---MLT` or `C:\Users\<you>\Projects\OPCAL---MLT`; virtual environments inside iCloud/OneDrive folders can be slow or partially restored.
 
 ---
 
 ## Local setup
 
+### macOS / Linux
+
 ```bash
-# Option A — venv + pip
-python3 -m venv .venv
+cd /path/to/OPCAL---MLT
+python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -U pip
-pip install -r requirements-dev.txt
-
-# Option B — Conda environment
-conda env create -f environment.yml
-conda activate opcal-mlt
-
-# Editable install for contributors
-pip install -e .
-
-# Launch the app (two equivalent options)
+python -m pip install -U pip setuptools wheel
+python -m pip install -e .
 opcal-mlt
-# or
-python -m opcal_mlt.app.main
+```
+
+For contributor tools and tests, install the dev extra instead:
+
+```bash
+python -m pip install -e ".[dev]"
+ruff check src tests
+pytest
+```
+
+### Windows PowerShell
+
+```powershell
+cd C:\Users\<you>\Projects\OPCAL---MLT
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -U pip setuptools wheel
+python -m pip install -e .
+opcal-mlt
+```
+
+If PowerShell blocks activation scripts, run this in the same PowerShell window and retry activation:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+You can also launch through the bundled helper:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\OPCAL-Labeler.ps1
 ```
 
 Default Streamlit address: `http://localhost:8501`
@@ -96,6 +119,7 @@ Default Streamlit address: `http://localhost:8501`
 | Upload & indexing | Load traces (`.csv`/`.npz`), choose cell IDs (auto, headers, external map) | Populates in-memory trace set, optionally reuses prior `cell_map.csv` |
 | Workspace | Visualise baseline vs ΔF/F, save labels with notes & uncertainty flag, compute peaks/features | Append rows to `labels.csv` and `peaks.csv` |
 | Finish & export | Aggregate statistics, optionally ZIP the session folder | `labels.csv`, `cell_map.csv`, `session.csv`, `peaks.csv`, exported archive |
+| Training export | Split confident labels into class-wise headerless CSVs and uncertain labels into a separate CSV | `training_csv_export_*/*.csv`, `training_csv_export_*.zip` |
 | Archive & backup | Copy session folders into `data/labeled_sessions/` and zip nightly | `data/` tree (see [Data guide](docs/data/README.md)) |
 
 ### CSV schemas (summary)
@@ -137,9 +161,10 @@ Core unit suites live in `tests/unit/` and focus on domain/services correctness.
 ### Release checklist (manual)
 1. Align version strings (`pyproject.toml`, `app/app.py::APP_VERSION`, docs).
 2. Update [docs/CHANGELOG.md](docs/CHANGELOG.md) with dated entries.
-3. Smoke-test the 4-step flow on representative data (CSV and NPZ).
-4. Build platform bundles with `python tools/distribution/build.py` (see `docs/distribution.md`) and use `scripts/build-macos-zip.sh` only when a lightweight source ZIP is preferred.
-5. Tag the release in Git and attach the docs/demos requested by the team.
+3. Smoke-test the 4-step flow on representative CSV and NPZ data.
+4. Verify both exports: full session ZIP and class-wise training CSV ZIP.
+5. Build platform bundles with `python tools/distribution/build.py` (see `docs/distribution.md`) and use source launchers only as a fallback.
+6. Tag the release in Git and attach the docs/demos requested by the team.
 
 ---
 

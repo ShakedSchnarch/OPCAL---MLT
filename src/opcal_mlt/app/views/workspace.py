@@ -16,6 +16,7 @@ from pathlib import Path
 import numpy as np
 import streamlit as st
 
+from opcal_mlt import __version__
 from opcal_mlt.app.components import (
     render_navigation_and_progress,
     render_sidebar_params,
@@ -164,7 +165,7 @@ def _handle_save_label(
         "baseline_window_s_or_q": float(s.get("window_s", 20)) if str(s.get("baseline_method", "rolling_median")).startswith("rolling") else 25.0,
         "sd_method": "MAD",
         "threshold_k": float(data.get("k", s.get("k", 3.0))),
-        "version": "mlt-0.2.0",
+        "version": __version__,
     }
 
     logger = SessionLogger(Path(session_dir))

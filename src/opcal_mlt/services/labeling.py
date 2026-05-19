@@ -10,14 +10,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Sequence
 
 import numpy as np
 
 from opcal_mlt.app.session_io import append_labels, append_peaks
 from opcal_mlt.core.features import basic_features
 from opcal_mlt.domain.enums import BaselineMethod, LabelClass
-from opcal_mlt.domain.models import LabelRecord, LabelState, PeakRecord, TraceSet
+from opcal_mlt.domain.models import LabelRecord, LabelState, TraceSet
 
 
 @dataclass(slots=True)

@@ -8,7 +8,7 @@ Type hints are included in docstrings for clarity, even though Pydantic enforces
 """
 from __future__ import annotations
 from pydantic import BaseModel, Field
-from typing import List, Literal, Optional, Dict, Any
+from typing import Any, Dict, List, Literal
 
 # LabelName is the controlled vocabulary of allowed label categories for cell activity.
 LabelName = Literal["High-flat", "High-oscillatory", "Oscillatory", "Low-activity", "Drifting"]
