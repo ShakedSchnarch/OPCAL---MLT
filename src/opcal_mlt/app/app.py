@@ -14,7 +14,6 @@ from uuid import uuid4
 
 import streamlit as st
 
-from opcal_mlt import __version__
 from opcal_mlt.app.state_store import (
     HYDRATED_FLAG,
     clear_state_for_token,
@@ -39,9 +38,10 @@ from opcal_mlt.services.ingest import IngestService
 from opcal_mlt.services.labeling import LabelingService
 from opcal_mlt.services.logging import SessionLogger
 from opcal_mlt.services.sessions import SessionService
+from opcal_mlt.version import get_app_version
 
 APP_NAME = "OPCAL-Labeler"
-APP_VERSION = __version__
+APP_VERSION = get_app_version()
 STAGE_FLOW = [Stage.START, Stage.INGEST, Stage.WORKSPACE, Stage.EXPORT]
 ASSETS_DIR = Path(__file__).parent / "assets"
 DEFAULT_ICON = ASSETS_DIR / "logo.png"

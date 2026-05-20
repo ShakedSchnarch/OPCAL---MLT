@@ -1,6 +1,6 @@
 [project]
 name = "opcal-mlt"
-version = "1.1.0"
+version = "1.1.1"
 description = "OPCAL-Labeler: manual labeling tool for calcium imaging traces"
 readme = "README.md"
 requires-python = ">=3.12"

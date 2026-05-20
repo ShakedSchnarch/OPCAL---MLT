@@ -29,7 +29,7 @@
 | Visual policy | Pre-stimulus STD band fixed to 1·σ, post-stimulus band scales with `k`; thresholds stay consistent with detection logic |
 | Outputs | Deterministic session CSVs (`session.csv`, `cell_map.csv`, `labels.csv`, `peaks.csv`), ZIP archive export, and class-wise training CSV export |
 | Services | Typed domain + service layer for ingesting traces, saving labels, and exporting sessions |
-| Versioning | App UI and package metadata report `1.1.0` from `opcal_mlt.__version__` |
+| Versioning | App UI and package metadata report `1.1.1` via `opcal_mlt.version.get_app_version()` |
 
 ---
 

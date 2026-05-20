@@ -1,4 +1,4 @@
-# User Guide — OPCAL‑MLT v1.1.0
+# User Guide — OPCAL‑MLT v1.1.1
 
 This guide walks annotators and lab operators through the complete four-stage workflow: **Start → Upload → Workspace → Finish**. All data stays local and the app writes human-readable CSV files.
 

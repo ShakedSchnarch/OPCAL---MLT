@@ -1,6 +1,8 @@
 """OPCAL-MLT package metadata."""
 from __future__ import annotations
 
-__version__ = "1.1.0"
+from opcal_mlt.version import get_app_version
+
+__version__ = get_app_version()
 
 __all__ = ["__version__"]
