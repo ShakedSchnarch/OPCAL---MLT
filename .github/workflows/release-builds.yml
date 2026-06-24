@@ -6,6 +6,10 @@ on:
     tags:
       - "v*"
 
+env:
+  PYTHONUTF8: "1"
+  PYTHONIOENCODING: "utf-8"
+
 jobs:
   windows:
     name: Windows executable ZIP
@@ -38,7 +42,8 @@ jobs:
       - name: Build console QA executable
         shell: pwsh
         run: |
-          python tools\distribution\build.py --clean --console --name OPCAL-MLT-QA --no-zip
+          python tools\distribution\build.py --clean --console --name OPCAL-MLT-QA --no-zip 2>&1 | Tee-Object windows-build-console.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Smoke test console QA executable
         shell: pwsh
@@ -77,7 +82,18 @@ jobs:
       - name: Build final windowed executable
         shell: pwsh
         run: |
-          python tools\distribution\build.py --clean
+          python tools\distribution\build.py --clean 2>&1 | Tee-Object windows-build-final.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload Windows failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: OPCAL-MLT-windows-failure-logs
+          path: |
+            windows-build-*.log
+            build/pyinstaller/windows/spec/*.spec
+          if-no-files-found: ignore
 
       - name: Upload Windows ZIP
         uses: actions/upload-artifact@v4

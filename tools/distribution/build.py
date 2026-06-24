@@ -241,7 +241,7 @@ def _build(platform_key: str, args: argparse.Namespace) -> None:
             raise SystemExit("macOS builds require an .icns icon file")
         pyinstaller_args.extend(["--icon", str(icon_path)])
 
-    print("→ Running PyInstaller with arguments:\n  " + "\n  ".join(pyinstaller_args))
+    print("Running PyInstaller with arguments:\n  " + "\n  ".join(pyinstaller_args))
     PYINSTALLER.run(pyinstaller_args)
 
     if platform_key == "windows":
@@ -256,15 +256,15 @@ def _build(platform_key: str, args: argparse.Namespace) -> None:
 
     if not artefact_dir.exists():
         print(
-            "⚠️  PyInstaller finished without creating the expected artefact. "
+            "WARNING: PyInstaller finished without creating the expected artefact. "
             "Check the logs above for errors.",
             file=sys.stderr,
         )
     else:
-        print(f"✅ Build complete: {artefact_dir}")
+        print(f"Build complete: {artefact_dir}")
         if not args.no_zip:
             archive_path = _make_release_zip(artefact_dir, platform_key, args.name)
-            print(f"✅ ZIP complete: {archive_path}")
+            print(f"ZIP complete: {archive_path}")
 
 
 def _make_release_zip(artefact_dir: Path, platform_key: str, app_name: str) -> Path:
@@ -293,7 +293,7 @@ def _repair_macos_bundle(app_dir: Path, work_dir: Path, app_name: str) -> None:
     build_zip = work_dir / "build" / app_name / "base_library.zip"
     if build_zip.exists() and not zipfile.is_zipfile(resources_zip):
         shutil.copy2(build_zip, resources_zip)
-        print(f"→ Repaired macOS base_library.zip from {build_zip}")
+        print(f"Repaired macOS base_library.zip from {build_zip}")
 
     xattr = shutil.which("xattr")
     if xattr:
