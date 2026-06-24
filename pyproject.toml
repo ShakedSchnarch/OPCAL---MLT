@@ -1,6 +1,6 @@
 [project]
 name = "opcal-mlt"
-version = "1.1.1"
+version = "1.2.0"
 description = "OPCAL-Labeler: manual labeling tool for calcium imaging traces"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -40,14 +40,12 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.package-data]
-"opcal_mlt" = []
-"opcal_mlt.app.assets" = ["*.png"]
-"opcal_mlt.app.config" = ["*.toml"]
+"opcal_mlt.app" = ["main.py", "assets/*.png", "config/*.toml"]
 
 
 [tool.versioning]
-release-date = "2025-08-17"
-changelog = "Updated to version 0.4.0 with major UI/UX improvements, session handling refinements, and statistics visualization."
+release-date = "2026-06-24"
+changelog = "Updated to version 1.2.0 with standalone distribution, PyInstaller-safe launch, and source launcher preflight checks."
 
 [tool.pytest.ini_options]
 addopts = "--strict-config --strict-markers -ra"

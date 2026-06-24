@@ -1,4 +1,4 @@
-# User Guide — OPCAL‑MLT v1.1.1
+# User Guide — OPCAL‑MLT v1.2.0
 
 This guide walks annotators and lab operators through the complete four-stage workflow: **Start → Upload → Workspace → Finish**. All data stays local and the app writes human-readable CSV files.
 
@@ -19,15 +19,29 @@ This guide walks annotators and lab operators through the complete four-stage wo
 
 ## Prerequisites
 
-- Python 3.12 (as specified in `pyproject.toml`)
-- Dependencies installed via `pip install -e .` from the project root
-- Project installed in editable mode (`pip install -e .`)
+- Standalone release ZIP for Windows or macOS.
 - Trace file in CSV (`T × N`) or NPZ format; optional metadata JSON/CSV with cell identifiers
-- A local project folder outside iCloud/OneDrive/Dropbox is recommended for reliable virtual environments.
+- A local app/data folder outside iCloud/OneDrive/Dropbox is recommended for reliable file writes.
+
+Python 3.12 and `pip install -e .` are needed only for the source fallback or development workflow.
 
 ---
 
 ## Launch the app
+
+### Standalone release
+
+1. Download `OPCAL-MLT-1.2.0-windows.zip` or `OPCAL-MLT-1.2.0-macos.zip`.
+2. Unzip it into a local folder.
+3. Launch the app:
+   - Windows: double-click `OPCAL-MLT.exe`.
+   - macOS: double-click `OPCAL-MLT.app`.
+
+The browser opens at `http://localhost:8501`. Keep the app process running while labeling.
+
+### Source fallback
+
+Use this path only if no standalone release is available.
 
 ### macOS / Linux
 
@@ -62,6 +76,18 @@ You can also run the Windows helper from the project root:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\OPCAL-Labeler.ps1
+```
+
+If a source `.venv` becomes stale or cannot import the app, rebuild it explicitly:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\OPCAL-Labeler.ps1 --rebuild
+```
+
+On macOS/Linux:
+
+```bash
+./scripts/OPCAL-Labeler.command --rebuild
 ```
 
 The browser opens at `http://localhost:8501`. Keep the terminal visible in case the app emits log messages or errors.

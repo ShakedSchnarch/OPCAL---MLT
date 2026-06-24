@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
-FALLBACK_VERSION = "1.1.1"
+FALLBACK_VERSION = "1.2.0"
 
 
 def get_app_version() -> str:

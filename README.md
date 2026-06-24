@@ -29,7 +29,7 @@
 | Visual policy | Pre-stimulus STD band fixed to 1·σ, post-stimulus band scales with `k`; thresholds stay consistent with detection logic |
 | Outputs | Deterministic session CSVs (`session.csv`, `cell_map.csv`, `labels.csv`, `peaks.csv`), ZIP archive export, and class-wise training CSV export |
 | Services | Typed domain + service layer for ingesting traces, saving labels, and exporting sessions |
-| Versioning | App UI and package metadata report `1.1.1` via `opcal_mlt.version.get_app_version()` |
+| Versioning | App UI and package metadata report `1.2.0` via `opcal_mlt.version.get_app_version()` |
 
 ---
 
@@ -51,7 +51,25 @@ Key concepts:
 
 ---
 
-## Prerequisites
+## Running a Release Build
+
+For annotators and other non-technical users, use the standalone release ZIP for
+your operating system:
+
+1. Download `OPCAL-MLT-1.2.0-windows.zip` or `OPCAL-MLT-1.2.0-macos.zip`.
+2. Unzip it into a local folder such as `C:\Users\<you>\OPCAL-MLT` or
+   `~/Applications/OPCAL-MLT`.
+3. Launch the app:
+   - Windows: double-click `OPCAL-MLT.exe`.
+   - macOS: double-click `OPCAL-MLT.app`.
+4. The browser opens at `http://localhost:8501`; keep the app running while
+   labeling.
+
+The release build bundles Python and dependencies. Do not ask annotators to run
+`pip`, create a virtual environment, or use a terminal unless they are using the
+source fallback below.
+
+## Source Prerequisites
 
 - Python **3.12** (match the version declared in `pyproject.toml`)
 - Install dependencies via `requirements.txt` **or** the Conda `environment.yml`
@@ -61,7 +79,9 @@ Key concepts:
 
 ---
 
-## Local setup
+## Source fallback
+
+Use this only for development or when no standalone build is available.
 
 ### macOS / Linux
 
@@ -72,6 +92,14 @@ source .venv/bin/activate
 python -m pip install -U pip setuptools wheel
 python -m pip install -e .
 opcal-mlt
+```
+
+The bundled launcher performs an import/version sanity check and can rebuild a
+broken local `.venv` on request:
+
+```bash
+./scripts/OPCAL-Labeler.command
+./scripts/OPCAL-Labeler.command --rebuild
 ```
 
 For contributor tools and tests, install the dev extra instead:
@@ -103,9 +131,18 @@ You can also launch through the bundled helper:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\OPCAL-Labeler.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\OPCAL-Labeler.ps1 --rebuild
 ```
 
 Default Streamlit address: `http://localhost:8501`
+
+Useful launcher diagnostics:
+
+```bash
+opcal-mlt --version
+opcal-mlt --diagnostics
+opcal-mlt --headless --server.port 8502
+```
 
 > **Tip:** running `opcal-mlt` copies `.streamlit/config.toml` from `src/opcal_mlt/app/config/streamlit_theme.toml` automatically (handled by `launch.py`).
 
@@ -163,7 +200,7 @@ Core unit suites live in `tests/unit/` and focus on domain/services correctness.
 2. Update [docs/CHANGELOG.md](docs/CHANGELOG.md) with dated entries.
 3. Smoke-test the 4-step flow on representative CSV and NPZ data.
 4. Verify both exports: full session ZIP and class-wise training CSV ZIP.
-5. Build platform bundles with `python tools/distribution/build.py` (see `docs/distribution.md`) and use source launchers only as a fallback.
+5. Build platform bundles with `python tools/distribution/build.py --clean` (see `docs/distribution.md`) and use source launchers only as a fallback.
 6. Tag the release in Git and attach the docs/demos requested by the team.
 
 ---

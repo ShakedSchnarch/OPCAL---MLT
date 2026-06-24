@@ -6,14 +6,14 @@ All tooling lives under `tools/distribution` and writes artefacts into `dist/`.
 
 ## Recommended distribution paths
 
-For non-technical annotators, prefer native PyInstaller bundles and wrap them in
-platform installers:
+For non-technical annotators, ship native PyInstaller bundles as the primary
+path. Source launchers are a fallback for developers or technical users only:
 
-- **macOS:** build `OPCAL-MLT.app`, sign/notarise it when distributing outside a
-  trusted lab machine, and ship a DMG.
-- **Windows:** for internal testing, run from source with the PowerShell commands
-  below. For non-technical users, build `OPCAL-MLT/OPCAL-MLT.exe` on a Windows
-  host and wrap the folder with Inno Setup or MSIX.
+- **macOS:** build `OPCAL-MLT.app`, zip it as `OPCAL-MLT-<version>-macos.zip`,
+  and sign/notarise it later if Gatekeeper becomes a blocker.
+- **Windows:** build the onedir folder containing `OPCAL-MLT.exe`, zip it as
+  `OPCAL-MLT-<version>-windows.zip`, and wrap it with Inno Setup/MSIX later if
+  Start Menu shortcuts are needed.
 - **Source ZIP fallback:** use `scripts/build-macos-zip.sh` only when users are
   comfortable letting the launcher create a local `.venv` and install Python
   dependencies on first run.
@@ -55,10 +55,12 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\.venv\Scripts\Activate.ps1
 ```
 
-One-command local launch is also available:
+One-command local launch is also available. It performs an import/version sanity
+check before launching and can rebuild `.venv` explicitly:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\OPCAL-Labeler.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\OPCAL-Labeler.ps1 --rebuild
 ```
 
 For developer validation on Windows:
@@ -74,7 +76,7 @@ python -m pytest
 All platforms share the same entry point:
 
 ```bash
-python tools/distribution/build.py
+python tools/distribution/build.py --clean
 ```
 
 The script auto-detects the host platform, prepares `build/pyinstaller/<platform>/`
@@ -87,8 +89,31 @@ Common flags:
 - `--collect-all` – force PyInstaller to collect data files for additional
   dependencies. Use this if you notice missing assets or runtime import errors.
 - `--icon <PATH>` – set a custom icon (`.icns` on macOS, `.ico` on Windows).
+- `--no-zip` – leave only the raw PyInstaller output and skip the release ZIP.
+- `--console` – build a QA executable that prints `--version`, `--diagnostics`,
+  and crash traces to the terminal. Do not use this for the final end-user ZIP.
 
-If PyInstaller is missing, the script exits with a descriptive message.
+The script always builds `onedir` output and, by default, creates a versioned ZIP
+next to the raw artefact. If PyInstaller is missing, the script exits with a
+descriptive message.
+
+## 3A. Building Windows From GitHub
+
+The recommended way to produce the Windows ZIP is the `release-builds` GitHub
+Actions workflow because it runs on a real Windows host.
+
+1. Push the release branch or tag to GitHub.
+2. Open the repository on GitHub.
+3. Go to **Actions** → **release-builds**.
+4. Click **Run workflow** and choose the branch.
+5. Wait for the **Windows executable ZIP** job to finish.
+6. Download the `OPCAL-MLT-windows` artifact.
+7. Inside the artifact, use `OPCAL-MLT-<version>-windows.zip` as the file to
+   send to Windows users.
+
+The workflow first builds `OPCAL-MLT-QA.exe` with a visible console and smoke
+tests `--version`, `--diagnostics`, and `http://localhost:8765`. Only after that
+does it build the final windowed `OPCAL-MLT.exe` ZIP.
 
 ## 4. Platform-specific notes
 
@@ -96,7 +121,8 @@ If PyInstaller is missing, the script exits with a descriptive message.
 
 1. Activate the build virtualenv and install PyInstaller.
 2. Run `python tools/distribution/build.py --clean --icon path/to/logo.icns`.
-3. The result is `dist/executables/macos/OPCAL-MLT.app`.
+3. The result is `dist/executables/macos/OPCAL-MLT.app` plus
+   `dist/executables/macos/OPCAL-MLT-<version>-macos.zip`.
 4. Optional post-processing:
    - Sign: `codesign --deep --force --sign "Developer ID Application: ..." OPCAL-MLT.app`
    - Notarise (for distribution outside the team) via `xcrun notarytool`.
@@ -105,12 +131,26 @@ If PyInstaller is missing, the script exits with a descriptive message.
 ### Windows
 
 1. Install PyInstaller in a virtualenv (`py -m pip install pyinstaller>=6.3`).
-2. Provide a `.ico` icon if desired and run:
+2. First build a console QA executable so diagnostics are visible in PowerShell:
+   ```powershell
+   py tools\distribution\build.py --clean --console --name OPCAL-MLT-QA
+   .\dist\executables\windows\OPCAL-MLT-QA\OPCAL-MLT-QA.exe --version
+   .\dist\executables\windows\OPCAL-MLT-QA\OPCAL-MLT-QA.exe --diagnostics
+   .\dist\executables\windows\OPCAL-MLT-QA\OPCAL-MLT-QA.exe --headless --server.port 8765
+   ```
+3. In another PowerShell window, verify the server:
+   ```powershell
+   Invoke-WebRequest -UseBasicParsing http://localhost:8765 | Select-Object -ExpandProperty StatusCode
+   ```
+   Stop the QA server with `Ctrl+C`.
+4. Provide a `.ico` icon if desired and build the final windowed release:
    ```powershell
    py tools/distribution/build.py --clean --icon path\to\logo.ico
    ```
-3. PyInstaller writes an unpacked folder: `dist/executables/windows/OPCAL-MLT/` containing `OPCAL-MLT.exe`.
-4. Package options:
+5. PyInstaller writes an unpacked folder: `dist/executables/windows/OPCAL-MLT/`
+   containing `OPCAL-MLT.exe`, plus
+   `dist/executables/windows/OPCAL-MLT-<version>-windows.zip`.
+6. Package options:
    - Compress the folder into a ZIP for quick sharing.
    - Use Inno Setup/MSIX to create an installer that adds Start Menu shortcuts.
 
@@ -134,10 +174,12 @@ After each build:
   - training ZIP contains only class-wise CSVs.
 - Inspect `logs/` or console output for missing module warnings.
 
-For automated smoke tests, call the generated executable with Streamlit's headless flag:
+For automated smoke tests, call the generated executable with launcher flags:
 
 ```bash
-./dist/executables/linux/OPCAL-MLT/OPCAL-MLT --server.headless true --help
+./dist/executables/linux/OPCAL-MLT/OPCAL-MLT --version
+./dist/executables/linux/OPCAL-MLT/OPCAL-MLT --diagnostics
+./dist/executables/linux/OPCAL-MLT/OPCAL-MLT --headless --server.port 8502
 ```
 
 Use the platform-appropriate path (e.g. `OPCAL-MLT.app/Contents/MacOS/OPCAL-MLT` on macOS).
@@ -149,7 +191,8 @@ publishing binaries:
 
 1. Build per-platform bundles using `tools/distribution/build.py` on the native host.
 2. Smoke-test each build with representative datasets.
-3. Package (ZIP/DMG/MSI) and, if required, sign/notarise the deliverables.
+3. Keep the generated ZIP for internal distribution; optionally package as
+   DMG/MSI and sign/notarise later.
 4. Upload artefacts to the Git tag release alongside the changelog entry.
 5. Document any platform-specific caveats in the release notes.
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-NAME="OPCAL-Labeler-macOS"
+VERSION="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+NAME="OPCAL-MLT-${VERSION}-source-macOS"
 OUT="dist/$NAME"
 
 echo "→ Preparing $OUT"

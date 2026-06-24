@@ -17,13 +17,17 @@ Build for Windows from a Windows host, with a custom icon and output location:
 The script expects PyInstaller (>=6.3) to be installed in the active environment
 and surfaces actionable errors when prerequisites are missing.
 """
+
 from __future__ import annotations
 
 import argparse
 import os
 import platform
 import shutil
+import subprocess
 import sys
+import tomllib
+import zipfile
 from pathlib import Path
 from textwrap import dedent
 
@@ -36,6 +40,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DIST_DIR = REPO_ROOT / "dist" / "executables"
 DEFAULT_BUILD_DIR = REPO_ROOT / "build" / "pyinstaller"
 ENTRYPOINT = REPO_ROOT / "src" / "opcal_mlt" / "app" / "launch.py"
+STREAMLIT_APP = REPO_ROOT / "src" / "opcal_mlt" / "app" / "main.py"
 ASSETS_DIR = REPO_ROOT / "src" / "opcal_mlt" / "app" / "assets"
 CONFIG_DIR = REPO_ROOT / "src" / "opcal_mlt" / "app" / "config"
 
@@ -104,7 +109,24 @@ def _parse_args() -> argparse.Namespace:
             "Repeat the flag for multiple entries."
         ).replace("{sep}", os.pathsep),
     )
+    parser.add_argument(
+        "--no-zip",
+        action="store_true",
+        help="Skip creating the versioned ZIP archive next to the build output",
+    )
+    parser.add_argument(
+        "--console",
+        action="store_true",
+        help="Build with a visible console for local QA and diagnostics",
+    )
     return parser.parse_args()
+
+
+def _project_version() -> str:
+    pyproject = REPO_ROOT / "pyproject.toml"
+    with pyproject.open("rb") as f:
+        data = tomllib.load(f)
+    return str(data["project"]["version"])
 
 
 def _resolve_dist_base(target: Path | None, platform_key: str) -> Path:
@@ -121,14 +143,10 @@ def _cleanup(paths: list[Path]) -> None:
 
 def _build(platform_key: str, args: argparse.Namespace) -> None:
     if PYINSTALLER is None:
-        raise SystemExit(
-            dedent(
-                """
+        raise SystemExit(dedent("""
                 PyInstaller is required but not installed.
                 Install it in your build environment, e.g. `pip install pyinstaller>=6.3`.
-                """
-            ).strip()
-        )
+                """).strip())
 
     dist_base = _resolve_dist_base(args.output, platform_key)
     work_dir = args.work / platform_key
@@ -136,17 +154,21 @@ def _build(platform_key: str, args: argparse.Namespace) -> None:
 
     work_dir.mkdir(parents=True, exist_ok=True)
     spec_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_local_build_caches(work_dir)
 
     if args.clean:
         _cleanup([dist_base, work_dir])
         dist_base.mkdir(parents=True, exist_ok=True)
         work_dir.mkdir(parents=True, exist_ok=True)
         spec_dir.mkdir(parents=True, exist_ok=True)
+        _ensure_local_build_caches(work_dir)
 
-    if not ENTRYPOINT.exists():
-        raise SystemExit(f"Entrypoint not found: {ENTRYPOINT}")
+    for required in (ENTRYPOINT, STREAMLIT_APP):
+        if not required.exists():
+            raise SystemExit(f"Required application file not found: {required}")
 
     datas = [
+        f"{STREAMLIT_APP}{os.pathsep}opcal_mlt/app",
         f"{ASSETS_DIR}{os.pathsep}opcal_mlt/app/assets",
         f"{CONFIG_DIR}{os.pathsep}opcal_mlt/app/config",
     ]
@@ -156,8 +178,7 @@ def _build(platform_key: str, args: argparse.Namespace) -> None:
         "--name",
         args.name,
         "--noconfirm",
-        "--clean",
-        "--windowed",
+        "--onedir",
         "--distpath",
         str(dist_base),
         "--workpath",
@@ -172,7 +193,13 @@ def _build(platform_key: str, args: argparse.Namespace) -> None:
     for extra_data in args.add_data:
         pyinstaller_args.extend(["--add-data", extra_data])
 
+    pyinstaller_args.append("--console" if args.console else "--windowed")
+
+    if args.clean:
+        pyinstaller_args.append("--clean")
+
     hidden_imports = [
+        "opcal_mlt.app.main",
         "streamlit.web.cli",
         "streamlit.web.bootstrap",
         "streamlit.web.server.server",
@@ -180,6 +207,13 @@ def _build(platform_key: str, args: argparse.Namespace) -> None:
     ]
     for hidden in hidden_imports:
         pyinstaller_args.extend(["--hidden-import", hidden])
+
+    metadata_targets = [
+        "opcal-mlt",
+        "streamlit",
+    ]
+    for target in metadata_targets:
+        pyinstaller_args.extend(["--copy-metadata", target])
 
     if args.collect_all:
         collect_targets = [
@@ -192,6 +226,8 @@ def _build(platform_key: str, args: argparse.Namespace) -> None:
         for target in collect_targets:
             pyinstaller_args.extend(["--collect-all", target])
     else:
+        pyinstaller_args.extend(["--collect-submodules", "opcal_mlt"])
+        pyinstaller_args.extend(["--collect-data", "opcal_mlt"])
         pyinstaller_args.extend(["--collect-data", "streamlit"])
         pyinstaller_args.extend(["--collect-submodules", "streamlit"])
 
@@ -205,10 +241,6 @@ def _build(platform_key: str, args: argparse.Namespace) -> None:
             raise SystemExit("macOS builds require an .icns icon file")
         pyinstaller_args.extend(["--icon", str(icon_path)])
 
-    if platform_key != "windows":
-        # Hide the terminal window on POSIX by default
-        pyinstaller_args.append("--noconsole")
-
     print("→ Running PyInstaller with arguments:\n  " + "\n  ".join(pyinstaller_args))
     PYINSTALLER.run(pyinstaller_args)
 
@@ -219,6 +251,9 @@ def _build(platform_key: str, args: argparse.Namespace) -> None:
     else:
         artefact_dir = dist_base / args.name
 
+    if platform_key == "macos" and artefact_dir.exists():
+        _repair_macos_bundle(artefact_dir, work_dir, args.name)
+
     if not artefact_dir.exists():
         print(
             "⚠️  PyInstaller finished without creating the expected artefact. "
@@ -227,6 +262,42 @@ def _build(platform_key: str, args: argparse.Namespace) -> None:
         )
     else:
         print(f"✅ Build complete: {artefact_dir}")
+        if not args.no_zip:
+            archive_path = _make_release_zip(artefact_dir, platform_key, args.name)
+            print(f"✅ ZIP complete: {archive_path}")
+
+
+def _make_release_zip(artefact_dir: Path, platform_key: str, app_name: str) -> Path:
+    version = _project_version()
+    archive_base = artefact_dir.parent / f"{app_name}-{version}-{platform_key}"
+    archive_path = Path(
+        shutil.make_archive(
+            str(archive_base), "zip", artefact_dir.parent, artefact_dir.name
+        )
+    )
+    return archive_path
+
+
+def _ensure_local_build_caches(work_dir: Path) -> None:
+    cache_root = work_dir / "cache"
+    pyinstaller_cache = cache_root / "pyinstaller"
+    matplotlib_cache = cache_root / "matplotlib"
+    pyinstaller_cache.mkdir(parents=True, exist_ok=True)
+    matplotlib_cache.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("PYINSTALLER_CONFIG_DIR", str(pyinstaller_cache))
+    os.environ.setdefault("MPLCONFIGDIR", str(matplotlib_cache))
+
+
+def _repair_macos_bundle(app_dir: Path, work_dir: Path, app_name: str) -> None:
+    resources_zip = app_dir / "Contents" / "Resources" / "base_library.zip"
+    build_zip = work_dir / "build" / app_name / "base_library.zip"
+    if build_zip.exists() and not zipfile.is_zipfile(resources_zip):
+        shutil.copy2(build_zip, resources_zip)
+        print(f"→ Repaired macOS base_library.zip from {build_zip}")
+
+    xattr = shutil.which("xattr")
+    if xattr:
+        subprocess.run([xattr, "-cr", str(app_dir)], check=False)
 
 
 def main() -> None:
@@ -239,7 +310,9 @@ def main() -> None:
             "Cross-compiling is not supported. Run this script on the target platform."
         )
 
-    print(f"Building OPCAL-MLT for {target_platform} (host: {platform.system().lower()})")
+    print(
+        f"Building OPCAL-MLT for {target_platform} (host: {platform.system().lower()})"
+    )
     _build(target_platform, args)
 
 

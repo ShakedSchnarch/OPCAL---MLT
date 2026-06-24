@@ -4,9 +4,21 @@
 
 ---
 
-## 1. Install the app
+## 1. Open the app
 
-Use a local folder that is not managed by iCloud/OneDrive/Dropbox when possible.
+Use the standalone release ZIP for your operating system:
+
+1. Download `OPCAL-MLT-1.2.0-windows.zip` or `OPCAL-MLT-1.2.0-macos.zip`.
+2. Unzip it into a local folder that is not managed by iCloud/OneDrive/Dropbox when possible.
+3. Launch the app:
+   - Windows: double-click `OPCAL-MLT.exe`.
+   - macOS: double-click `OPCAL-MLT.app`.
+
+The release build includes Python and dependencies. No terminal setup is needed.
+
+### Source fallback
+
+Use this only if you received the source project instead of a standalone build.
 
 ### macOS / Linux
 
@@ -45,6 +57,13 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 opcal-mlt
 # or
 python -m opcal_mlt.app.main
+```
+
+The source launchers can also repair a stale local environment:
+
+```bash
+./scripts/OPCAL-Labeler.command --rebuild
+powershell -ExecutionPolicy Bypass -File .\scripts\OPCAL-Labeler.ps1 --rebuild
 ```
 
 The browser opens at `http://localhost:8501`. Keep the terminal visible for logs.

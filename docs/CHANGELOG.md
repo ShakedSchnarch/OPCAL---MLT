@@ -2,6 +2,19 @@
 
 All notable changes follow the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
+## [1.2.0] - 2026-06-24
+### Added
+- PyInstaller-safe launcher with `--version`, `--diagnostics`, `--headless`, and `--server.port` support.
+- Versioned standalone ZIP generation for platform builds.
+- Source launcher preflight checks with explicit `.venv` rebuild support.
+
+### Changed
+- End-user documentation now leads with standalone Windows/macOS releases instead of terminal-based setup.
+- Distribution builds collect the Streamlit entry file, OPCAL modules, assets, and theme config for frozen execution.
+
+### Fixed
+- Restored the tracked favicon asset so package/build asset sets are consistent.
+
 ## [1.1.1] - 2026-05-20
 ### Fixed
 - Windows/source launches no longer depend on importing `__version__` from `opcal_mlt.__init__`, so partially refreshed source trees fail less often during Streamlit startup.

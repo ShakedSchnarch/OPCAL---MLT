@@ -10,7 +10,7 @@
 - [x] Tester
 - [x] Sliding bar
 - [x] Documentation standardization
-- [ ]  Implement one-click launch (if applicable)
+- [x]  Implement one-click launch (if applicable)
 - [ ] Refresh option
 
 ## Critical
@@ -20,7 +20,7 @@
 - [ ] After the fix, run `pytest -vv` and archive the successful output under `docs/dev/`.
 - [ ] Align version numbers across `pyproject.toml`, `src/opcal_mlt/app/main.py`, `README.md`, and `docs/CHANGELOG.md`; document the rationale in the changelog.
 - [ ] Update `main.py` so `APP_VERSION` is sourced from a single location (e.g. `src/opcal_mlt/__init__.py`).
-- [ ] Fix the macOS build pipeline: add the missing `scripts/OPCAL-Labeler.command` or remove the reference from `scripts/build-macos-zip.sh:12`, run the build script, and verify `dist/OPCAL-Labeler-macOS.zip` is runnable.
+- [ ] Smoke-test the PyInstaller Windows and macOS release ZIPs on native hosts and archive the results under `docs/dev/build-log.md`.
 - [ ] Document the build log (commands + output) in `docs/dev/build-log.md` for publication transparency.
 - [x] Produce dependency lock files (`requirements.txt` and `environment.yml`) for reproducible environments.
 - [x] Update installation instructions in `README.md` and `docs/USER_GUIDE.md` to reference the new environment files.
