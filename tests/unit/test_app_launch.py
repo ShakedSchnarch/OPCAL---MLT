@@ -34,3 +34,22 @@ def test_streamlit_args_accept_port(monkeypatch) -> None:
     result = launch._streamlit_args(args)
 
     assert "--server.port=8503" in result
+
+
+def test_ensure_standard_streams_restores_missing_streams(monkeypatch, tmp_path) -> None:
+    log_path = tmp_path / "launcher.log"
+    original_handles = list(launch._STDIO_HANDLES)
+    monkeypatch.setattr(launch, "_launcher_log_path", lambda: log_path)
+    monkeypatch.setattr(launch.sys, "stdout", None)
+    monkeypatch.setattr(launch.sys, "stderr", None)
+
+    try:
+        launch._ensure_standard_streams()
+
+        assert launch.sys.stdout is not None
+        assert launch.sys.stderr is not None
+        assert log_path.exists()
+    finally:
+        for handle in launch._STDIO_HANDLES[len(original_handles) :]:
+            handle.close()
+        launch._STDIO_HANDLES[:] = original_handles

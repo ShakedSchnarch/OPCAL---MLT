@@ -8,8 +8,11 @@ import os
 import sys
 import traceback
 from pathlib import Path
+from typing import IO
 
 from opcal_mlt.version import get_app_version
+
+_STDIO_HANDLES: list[IO[str]] = []
 
 
 def _is_frozen() -> bool:
@@ -58,6 +61,26 @@ def _write_launcher_log(message: str) -> None:
             f.write(message.rstrip() + "\n")
     except Exception:
         pass
+
+
+def _ensure_standard_streams() -> None:
+    """Provide file-backed streams when a Windows GUI build has none."""
+
+    if sys.stdout is not None and sys.stderr is not None:
+        return
+
+    try:
+        log_path = _launcher_log_path()
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_file = log_path.open("a", encoding="utf-8", buffering=1)
+    except Exception:
+        return
+
+    _STDIO_HANDLES.append(log_file)
+    if sys.stdout is None:
+        sys.stdout = log_file
+    if sys.stderr is None:
+        sys.stderr = log_file
 
 
 def _ensure_streamlit_config() -> None:
@@ -196,6 +219,7 @@ def _main(argv: list[str] | None = None) -> None:
 def main(argv: list[str] | None = None) -> None:
     """Run the launcher and persist startup exceptions for windowed builds."""
 
+    _ensure_standard_streams()
     try:
         _main(argv)
     except Exception:
