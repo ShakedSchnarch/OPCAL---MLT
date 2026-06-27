@@ -42,17 +42,17 @@ jobs:
       - name: Build console QA executable
         shell: pwsh
         run: |
-          python tools\distribution\build.py --clean --console --name OPCAL-MLT-QA --no-zip 2>&1 | Tee-Object windows-build-console.log
+          python tools\distribution\build.py --clean --console --name OPCAL-MLT-QA --output dist\executables\windows-console 2>&1 | Tee-Object windows-build-console.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Smoke test console QA executable
         shell: pwsh
         run: |
-          .\dist\executables\windows\OPCAL-MLT-QA\OPCAL-MLT-QA.exe --version
-          .\dist\executables\windows\OPCAL-MLT-QA\OPCAL-MLT-QA.exe --diagnostics
+          .\dist\executables\windows-console\OPCAL-MLT-QA\OPCAL-MLT-QA.exe --version
+          .\dist\executables\windows-console\OPCAL-MLT-QA\OPCAL-MLT-QA.exe --diagnostics
 
           $server = Start-Process `
-            -FilePath ".\dist\executables\windows\OPCAL-MLT-QA\OPCAL-MLT-QA.exe" `
+            -FilePath ".\dist\executables\windows-console\OPCAL-MLT-QA\OPCAL-MLT-QA.exe" `
             -ArgumentList "--headless --server.port 8765" `
             -PassThru
 
@@ -100,6 +100,13 @@ jobs:
         with:
           name: OPCAL-MLT-windows
           path: dist/executables/windows/OPCAL-MLT-*-windows.zip
+          if-no-files-found: error
+
+      - name: Upload Windows console diagnostics ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: OPCAL-MLT-windows-console-diagnostics
+          path: dist/executables/windows-console/OPCAL-MLT-QA-*-windows.zip
           if-no-files-found: error
 
   macos:

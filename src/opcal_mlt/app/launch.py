@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import importlib.resources as pkg_resources
+import os
 import sys
+import traceback
 from pathlib import Path
 
 from opcal_mlt.version import get_app_version
@@ -34,6 +36,28 @@ def _app_entrypoint() -> Path:
     """Return the physical Streamlit script path."""
 
     return _resource_path("main.py")
+
+
+def _launcher_log_path() -> Path:
+    """Return the user-writable launcher log path."""
+
+    if sys.platform.startswith("win"):
+        root = Path(os.environ.get("LOCALAPPDATA") or Path.home())
+    else:
+        root = Path(os.environ.get("XDG_STATE_HOME") or (Path.home() / ".local" / "state"))
+    return root / "OPCAL-MLT" / "logs" / "launcher.log"
+
+
+def _write_launcher_log(message: str) -> None:
+    """Append a launcher diagnostic message without blocking app startup."""
+
+    try:
+        log_path = _launcher_log_path()
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write(message.rstrip() + "\n")
+    except Exception:
+        pass
 
 
 def _ensure_streamlit_config() -> None:
@@ -113,6 +137,7 @@ def _print_diagnostics() -> None:
         "app_entrypoint_exists": str(app_path.exists()).lower(),
         "theme_config": str(config_path),
         "theme_config_exists": str(config_path.exists()).lower(),
+        "launcher_log": str(_launcher_log_path()),
     }
     for key, value in lines.items():
         print(f"{key}: {value}")
@@ -137,7 +162,7 @@ def _streamlit_args(args: argparse.Namespace) -> list[str]:
     return st_args
 
 
-def main(argv: list[str] | None = None) -> None:
+def _main(argv: list[str] | None = None) -> None:
     """Launch the Streamlit application for OPCAL-MLT."""
 
     args = _parse_args(argv)
@@ -150,9 +175,32 @@ def main(argv: list[str] | None = None) -> None:
 
     _ensure_streamlit_config()
     sys.argv = _streamlit_args(args)
+    _write_launcher_log(
+        "\n".join(
+            [
+                "Starting OPCAL-MLT",
+                f"version={get_app_version()}",
+                f"executable={sys.executable}",
+                f"frozen={_is_frozen()}",
+                f"app_entrypoint={_app_entrypoint()}",
+                f"app_entrypoint_exists={_app_entrypoint().exists()}",
+                f"argv={sys.argv}",
+            ]
+        )
+    )
     from streamlit.web.cli import main as st_main
 
     st_main()
+
+
+def main(argv: list[str] | None = None) -> None:
+    """Run the launcher and persist startup exceptions for windowed builds."""
+
+    try:
+        _main(argv)
+    except Exception:
+        _write_launcher_log("Launcher failed:\n" + traceback.format_exc())
+        raise
 
 
 if __name__ == "__main__":
