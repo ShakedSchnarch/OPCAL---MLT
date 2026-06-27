@@ -102,6 +102,13 @@ jobs:
           path: dist/executables/windows/OPCAL-MLT-*-windows.zip
           if-no-files-found: error
 
+      - name: Upload Windows one-extract folder
+        uses: actions/upload-artifact@v4
+        with:
+          name: OPCAL-MLT-windows-one-extract
+          path: dist/executables/windows/OPCAL-MLT/
+          if-no-files-found: error
+
       - name: Upload Windows console diagnostics ZIP
         uses: actions/upload-artifact@v4
         with:
